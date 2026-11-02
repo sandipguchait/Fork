@@ -193,6 +193,10 @@ svg {
 	color: var(--muted);
 }
 
+.codeblock-action.apply {
+	color: var(--vscode-textLink-foreground);
+}
+
 .codeblock-action:hover {
 	background: var(--vscode-toolbar-hoverBackground);
 	color: var(--vscode-foreground);

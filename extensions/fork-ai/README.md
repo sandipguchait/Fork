@@ -1,6 +1,6 @@
 # Fork AI
 
-Fork's built-in AI: chat with your own models from the right-hand sidebar. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
+Fork's built-in AI: chat and inline edits with your own models. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
 
 ## Use it
 
@@ -16,6 +16,21 @@ In the chat:
 - Code blocks have **Copy** and **Insert**. Insert replaces the selection in the editor you last used.
 - The model picker is in the input box. **New chat**, **History** and **Manage models** are in the view's title bar.
 
+## Inline edits (Cmd+I)
+
+1. Select code, or put the cursor on a line, and press **Cmd+I** (Ctrl+I). The context menu has **Edit with AI** too.
+2. Describe the change. The lines being edited are highlighted; press **Esc** to cancel.
+3. The change appears in place: old lines in red, new lines in green.
+4. Each change has **Accept** and **Reject** above it. **Cmd+Enter** accepts all and **Cmd+Backspace** rejects all; the status bar and the editor title have the same actions.
+
+**Apply** on a chat code block runs the same review on your selection, or on the whole file when nothing is selected (files up to 2,000 lines).
+
+Inline edits use the chat model unless you pick one for them: in **Manage Models**, press the pencil button on a model. A fast, cheap model works well here.
+
+Every step is an ordinary edit, so Cmd+Z works throughout. Typing inside a change stops tracking that change and leaves its lines as they are. Undoing the whole edit ends the review.
+
+Cmd+I replaces VS Code's alternative shortcut for suggestions on macOS; Ctrl+Space still opens suggestions. Cmd+K is left alone because VS Code uses it to start many two-key shortcuts.
+
 ## Where things are stored
 
 | What | Where |
@@ -30,6 +45,8 @@ In the chat:
 | --- | --- |
 | `src/extension.ts` | Activation and commands |
 | `src/chatView.ts` | The chat webview provider: context, streaming, history, Insert/Copy |
+| `src/inlineEdit.ts` | Cmd+I and Apply: the prompt, the in-place red/green review, Accept and Reject |
+| `src/diff.ts`, `src/editPrompt.ts` | The line diff and the edit prompt, unit-tested without VS Code |
 | `src/addModel.ts`, `src/manageModels.ts` | The Add model flow and the model list |
 | `src/modelStore.ts`, `src/history.ts`, `src/context.ts`, `src/presets.ts` | Pure logic, unit-tested without VS Code |
 | `src/protocol.ts` | Messages between the extension and the webview |

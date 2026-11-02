@@ -55,4 +55,5 @@ export type FromWebview =
 	| { readonly type: 'toggleCurrentFile' }
 	| { readonly type: 'copyCode'; readonly code: string }
 	| { readonly type: 'insertCode'; readonly code: string }
+	| { readonly type: 'applyCode'; readonly code: string }
 	| { readonly type: 'newChat' };

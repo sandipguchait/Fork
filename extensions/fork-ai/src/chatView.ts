@@ -211,10 +211,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			case 'insertCode':
 				await this.insertCode(message.code);
 				break;
+			case 'applyCode':
+				await vscode.commands.executeCommand('forkAi.applyCode', message.code);
+				break;
 			case 'newChat':
 				await this.newChat();
 				break;
 		}
+	}
+
+	/** The editor chat actions (Insert, Apply) act on: the last text editor the user worked in. */
+	targetEditor(): vscode.TextEditor | undefined {
+		return this.lastEditor && !this.lastEditor.document.isClosed ? this.lastEditor : undefined;
 	}
 
 	private async insertCode(code: string): Promise<void> {

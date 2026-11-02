@@ -103,7 +103,11 @@ function renderCodeBlock(language: string, code: string): HTMLElement {
 	insert.type = 'button';
 	insert.title = 'Insert at the cursor, replacing the selection';
 	insert.addEventListener('click', () => post({ type: 'insertCode', code }));
-	head.append(copy, insert);
+	const apply = el('button', 'codeblock-action apply', 'Apply');
+	apply.type = 'button';
+	apply.title = 'Apply to the selection, or the whole file, and review each change';
+	apply.addEventListener('click', () => post({ type: 'applyCode', code }));
+	head.append(copy, insert, apply);
 	const pre = el('pre');
 	const codeEl = el('code', language ? `language-${language}` : undefined);
 	codeEl.textContent = code;

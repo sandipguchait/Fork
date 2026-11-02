@@ -13,6 +13,7 @@ interface ModelItem extends vscode.QuickPickItem {
 
 const TEST = { iconPath: new vscode.ThemeIcon('beaker'), tooltip: 'Test connection' };
 const KEY = { iconPath: new vscode.ThemeIcon('key'), tooltip: 'Change API key' };
+const EDIT = { iconPath: new vscode.ThemeIcon('edit'), tooltip: 'Use for inline edits (Cmd+I) and Apply' };
 const REMOVE = { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remove model' };
 
 export function modelDetail(model: StoredModel): string {
@@ -29,19 +30,23 @@ export function modelDetail(model: StoredModel): string {
 export async function manageModels(store: ModelStore): Promise<void> {
 	const quickPick = vscode.window.createQuickPick<ModelItem>();
 	quickPick.title = 'Models';
-	quickPick.placeholder = 'Pick a model to use for chat';
+	quickPick.placeholder = 'Pick a model to use for chat. The pencil button picks the model for inline edits.';
 	quickPick.matchOnDetail = true;
 
 	const refresh = () => {
 		const chatId = store.chatModelId();
+		const editId = store.hasOwnEditModel() ? store.editModelId() : undefined;
 		quickPick.items = [
-			...store.list().map((model): ModelItem => ({
-				label: `${model.id === chatId ? '$(check) ' : ''}${model.displayName}`,
-				description: model.id === chatId ? 'chat model' : undefined,
-				detail: modelDetail(model),
-				buttons: [TEST, KEY, REMOVE],
-				model,
-			})),
+			...store.list().map((model): ModelItem => {
+				const roles = [model.id === chatId ? 'chat' : '', model.id === editId ? 'inline edits' : ''].filter(Boolean);
+				return {
+					label: `${model.id === chatId ? '$(check) ' : ''}${model.displayName}`,
+					description: roles.length ? roles.join(' · ') : undefined,
+					detail: modelDetail(model),
+					buttons: [EDIT, TEST, KEY, REMOVE],
+					model,
+				};
+			}),
 			{ label: '', kind: vscode.QuickPickItemKind.Separator },
 			{ label: '$(add) Add model…', alwaysShow: true },
 		];
@@ -54,7 +59,12 @@ export async function manageModels(store: ModelStore): Promise<void> {
 		if (!model) {
 			return;
 		}
-		if (button === TEST) {
+		if (button === EDIT) {
+			await store.setEditModel(model.id === store.editModelId() && store.hasOwnEditModel() ? undefined : model.id);
+			void vscode.window.showInformationMessage(store.hasOwnEditModel()
+				? `Inline edits and Apply now use ${model.displayName}.`
+				: 'Inline edits and Apply now use the chat model.');
+		} else if (button === TEST) {
 			await retestModel(store, model.id);
 		} else if (button === KEY) {
 			await changeKey(store, model.id);

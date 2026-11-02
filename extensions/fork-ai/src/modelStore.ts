@@ -21,6 +21,7 @@ export type StoredModel = Omit<ModelConfig, 'apiKey'> & { readonly hasKey: boole
 
 const MODELS_KEY = 'forkAi.models';
 const CHAT_MODEL_KEY = 'forkAi.chatModel';
+const EDIT_MODEL_KEY = 'forkAi.editModel';
 const secretKey = (id: string) => `forkAi.apiKey.${id}`;
 
 export class ModelStore {
@@ -71,6 +72,9 @@ export class ModelStore {
 		if (this.state.get<string>(CHAT_MODEL_KEY) === id) {
 			await this.state.update(CHAT_MODEL_KEY, models[0]?.id);
 		}
+		if (this.state.get<string>(EDIT_MODEL_KEY) === id) {
+			await this.state.update(EDIT_MODEL_KEY, undefined);
+		}
 		this.fire();
 	}
 
@@ -97,6 +101,26 @@ export class ModelStore {
 			return;
 		}
 		await this.state.update(CHAT_MODEL_KEY, id);
+		this.fire();
+	}
+
+	/** The model inline edits use: the one picked for edits, else the chat model. */
+	editModelId(): string | undefined {
+		const chosen = this.state.get<string>(EDIT_MODEL_KEY);
+		return chosen && this.get(chosen) ? chosen : this.chatModelId();
+	}
+
+	/** Whether inline edits use a model of their own rather than following the chat model. */
+	hasOwnEditModel(): boolean {
+		const chosen = this.state.get<string>(EDIT_MODEL_KEY);
+		return Boolean(chosen && this.get(chosen));
+	}
+
+	async setEditModel(id: string | undefined): Promise<void> {
+		if (id !== undefined && !this.get(id)) {
+			return;
+		}
+		await this.state.update(EDIT_MODEL_KEY, id);
 		this.fire();
 	}
 

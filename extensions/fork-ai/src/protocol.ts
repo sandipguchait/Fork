@@ -17,6 +17,23 @@ export interface ContextChip {
 	readonly kind: 'current' | 'file' | 'selection';
 }
 
+export interface StepView {
+	readonly id: string;
+	readonly kind: 'text' | 'tool';
+	readonly text: string;
+	readonly status?: 'running' | 'done' | 'error' | 'skipped' | 'awaiting';
+	readonly detail?: string;
+	/** Present while the step waits for Run / Skip. */
+	readonly approval?: { readonly command: string; readonly allowAlways: boolean };
+}
+
+export interface ChangeView {
+	readonly path: string;
+	readonly added: number;
+	readonly removed: number;
+	readonly created: boolean;
+}
+
 export interface TurnView {
 	readonly id: string;
 	readonly role: 'user' | 'assistant';
@@ -24,7 +41,15 @@ export interface TurnView {
 	readonly chips?: readonly string[];
 	readonly error?: string;
 	readonly modelName?: string;
+	/** Agent turns: text and tool steps in order. */
+	readonly steps?: readonly StepView[];
+	readonly changes?: readonly ChangeView[];
+	/** Undo is possible while the checkpoint is still in memory. */
+	readonly canUndo?: boolean;
+	readonly undone?: boolean;
 }
+
+export type ChatMode = 'ask' | 'agent';
 
 export interface ChatState {
 	readonly models: readonly ModelOption[];
@@ -36,6 +61,9 @@ export interface ChatState {
 	readonly attachments: readonly ContextChip[];
 	readonly busy: boolean;
 	readonly streamingTurnId: string | undefined;
+	readonly mode: ChatMode;
+	/** Shown above the input in agent mode: no folder open, or a model that failed the tool test. */
+	readonly agentWarning?: string;
 }
 
 export type ToWebview =
@@ -55,4 +83,9 @@ export type FromWebview =
 	| { readonly type: 'toggleCurrentFile' }
 	| { readonly type: 'copyCode'; readonly code: string }
 	| { readonly type: 'insertCode'; readonly code: string }
-	| { readonly type: 'newChat' };
+	| { readonly type: 'applyCode'; readonly code: string }
+	| { readonly type: 'newChat' }
+	| { readonly type: 'setMode'; readonly mode: ChatMode }
+	| { readonly type: 'approve'; readonly stepId: string; readonly decision: 'run' | 'always' | 'skip' }
+	| { readonly type: 'reviewChange'; readonly turnId: string; readonly path: string }
+	| { readonly type: 'undoChanges'; readonly turnId: string };

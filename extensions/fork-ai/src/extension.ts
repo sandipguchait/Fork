@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { addModel } from './addModel.ts';
 import { CHAT_VIEW_ID, ChatViewProvider } from './chatView.ts';
 import { ChatHistory } from './history.ts';
+import { InlineEditController } from './inlineEdit.ts';
 import { manageModels } from './manageModels.ts';
 import { ModelStore } from './modelStore.ts';
 
@@ -14,16 +15,39 @@ export function activate(context: vscode.ExtensionContext): void {
 	const store = new ModelStore(context.globalState, context.secrets);
 	// Chats belong to the project they were about.
 	const history = new ChatHistory(context.workspaceState);
-	const chat = new ChatViewProvider(context.extensionUri, store, history);
+	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState);
+	const inlineEdit = new InlineEditController(store);
 
 	context.subscriptions.push(
 		chat,
+		inlineEdit,
 		vscode.window.registerWebviewViewProvider(CHAT_VIEW_ID, chat, { webviewOptions: { retainContextWhenHidden: true } }),
 
 		vscode.commands.registerCommand('forkAi.openChat', () => chat.reveal()),
 		vscode.commands.registerCommand('forkAi.newChat', () => chat.newChat()),
 		vscode.commands.registerCommand('forkAi.addModel', () => addModel(store)),
 		vscode.commands.registerCommand('forkAi.manageModels', () => store.list().length ? manageModels(store) : addModel(store)),
+
+		vscode.commands.registerCommand('forkAi.inlineEdit', async () => {
+			const editor = vscode.window.activeTextEditor;
+			if (editor) {
+				await inlineEdit.edit(editor);
+			}
+		}),
+		vscode.commands.registerCommand('forkAi.applyCode', async (code: string) => {
+			const editor = chat.targetEditor();
+			if (!editor) {
+				void vscode.window.showInformationMessage('Open the file to apply this code to, then press Apply again.');
+				return;
+			}
+			const shown = await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn, selection: editor.selection });
+			await inlineEdit.applyCode(shown, code);
+		}),
+		vscode.commands.registerCommand('forkAi.acceptEdit', (uri: vscode.Uri, id: number) => inlineEdit.resolveHunk(uri, id, 'accept')),
+		vscode.commands.registerCommand('forkAi.rejectEdit', (uri: vscode.Uri, id: number) => inlineEdit.resolveHunk(uri, id, 'reject')),
+		vscode.commands.registerCommand('forkAi.acceptAllEdits', () => inlineEdit.resolveAll(undefined, 'accept')),
+		vscode.commands.registerCommand('forkAi.rejectAllEdits', () => inlineEdit.resolveAll(undefined, 'reject')),
+		vscode.commands.registerCommand('forkAi.cancelEdit', () => inlineEdit.cancel()),
 
 		vscode.commands.registerCommand('forkAi.addSelectionToChat', async () => {
 			const editor = vscode.window.activeTextEditor;

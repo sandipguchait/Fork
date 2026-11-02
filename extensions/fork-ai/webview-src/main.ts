@@ -2,7 +2,7 @@
  *  Fork AI. Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ChatState, ContextChip, FromWebview, ToWebview, TurnView } from '../src/protocol.ts';
+import type { ChangeView, ChatState, ContextChip, FromWebview, StepView, ToWebview, TurnView } from '../src/protocol.ts';
 import { parseMarkdown } from './markdown.ts';
 
 interface VsCodeApi {
@@ -21,6 +21,11 @@ const ICONS = {
 	close: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 	file: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.75h5L12.25 5v9.25H4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 1.75V5h3.25" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
 	plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+	check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+	error: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5M8 10.8v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+	skip: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+	pause: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5v7M10 4.5v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+	spin: '<svg viewBox="0 0 16 16" aria-hidden="true" class="spin"><path d="M8 2.5a5.5 5.5 0 1 1-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -57,13 +62,23 @@ input.rows = 1;
 input.placeholder = 'Ask about your code. Type @ to add a file.';
 input.setAttribute('aria-label', 'Message');
 const footer = el('div', 'composer-footer');
+const modeSelect = el('select', 'mode-select');
+modeSelect.setAttribute('aria-label', 'Mode');
+for (const [value, label, title] of [['ask', 'Ask', 'Answers questions about your code'], ['agent', 'Agent', 'Reads, edits and runs commands in your project to finish a task']]) {
+	const option = el('option', undefined, label);
+	option.value = value;
+	option.title = title;
+	modeSelect.append(option);
+}
 const modelSelect = el('select', 'model-select');
 modelSelect.setAttribute('aria-label', 'Model');
 const sendButton = iconButton('send', ICONS.send, 'Send (Enter)', () => sendOrStop());
+const warning = el('div', 'agent-warning');
+warning.setAttribute('role', 'status');
 
-footer.append(modelSelect, el('span', 'spacer'), sendButton);
+footer.append(modeSelect, modelSelect, el('span', 'spacer'), sendButton);
 composer.append(chips, input, footer);
-root.append(messages, composer);
+root.append(messages, warning, composer);
 document.body.append(root);
 
 // --- State ----------------------------------------------------------------------------------
@@ -103,7 +118,11 @@ function renderCodeBlock(language: string, code: string): HTMLElement {
 	insert.type = 'button';
 	insert.title = 'Insert at the cursor, replacing the selection';
 	insert.addEventListener('click', () => post({ type: 'insertCode', code }));
-	head.append(copy, insert);
+	const apply = el('button', 'codeblock-action apply', 'Apply');
+	apply.type = 'button';
+	apply.title = 'Apply to the selection, or the whole file, and review each change';
+	apply.addEventListener('click', () => post({ type: 'applyCode', code }));
+	head.append(copy, insert, apply);
 	const pre = el('pre');
 	const codeEl = el('code', language ? `language-${language}` : undefined);
 	codeEl.textContent = code;
@@ -161,12 +180,19 @@ function renderTurn(turn: TurnView): HTMLElement {
 	}
 
 	if (turn.modelName) {
-		node.append(el('div', 'turn-meta', turn.modelName));
+		node.append(el('div', 'turn-meta', turn.steps ? `${turn.modelName} · agent` : turn.modelName));
 	}
-	const body = el('div', 'assistant-body');
-	turnBodies.set(turn.id, body);
-	renderAssistantBody(turn, body);
-	node.append(body);
+	if (turn.steps) {
+		node.append(renderSteps(turn));
+		if (turn.changes?.length) {
+			node.append(renderChanges(turn, turn.changes));
+		}
+	} else {
+		const body = el('div', 'assistant-body');
+		turnBodies.set(turn.id, body);
+		renderAssistantBody(turn, body);
+		node.append(body);
+	}
 	if (turn.error) {
 		const error = el('div', 'error');
 		error.append(el('div', 'error-text', turn.error));
@@ -177,6 +203,117 @@ function renderTurn(turn: TurnView): HTMLElement {
 		node.append(error);
 	}
 	return node;
+}
+
+const STATUS_ICON: Record<NonNullable<StepView['status']>, string> = {
+	running: ICONS.spin, done: ICONS.check, error: ICONS.error, skipped: ICONS.skip, awaiting: ICONS.pause,
+};
+const STATUS_LABEL: Record<NonNullable<StepView['status']>, string> = {
+	running: 'Running', done: 'Done', error: 'Failed', skipped: 'Skipped', awaiting: 'Waiting for you',
+};
+const openDetails = new Set<string>();
+
+function renderToolStep(step: StepView): HTMLElement {
+	const status = step.status ?? 'done';
+	const card = el('div', `tool-step status-${status}`);
+	const head = el('button', 'tool-head');
+	head.type = 'button';
+	const icon = el('span', 'tool-icon');
+	icon.innerHTML = STATUS_ICON[status];
+	icon.title = STATUS_LABEL[status];
+	head.append(icon, el('span', 'tool-title', step.text));
+	head.setAttribute('aria-expanded', String(openDetails.has(step.id)));
+	head.setAttribute('aria-label', `${step.text}. ${STATUS_LABEL[status]}.${step.detail ? ' Show output.' : ''}`);
+	card.append(head);
+	if (step.detail) {
+		const detail = el('pre', 'tool-detail', step.detail);
+		detail.hidden = !openDetails.has(step.id);
+		head.addEventListener('click', () => {
+			detail.hidden = !detail.hidden;
+			head.setAttribute('aria-expanded', String(!detail.hidden));
+			if (detail.hidden) {
+				openDetails.delete(step.id);
+			} else {
+				openDetails.add(step.id);
+			}
+		});
+		card.append(detail);
+	} else {
+		head.disabled = true;
+	}
+	if (step.approval) {
+		const ask = el('div', 'approval');
+		const destructive = !step.approval.allowAlways;
+		ask.append(el('div', 'approval-text', destructive ? 'This command can delete data or rewrite history. Run it?' : 'Run this command?'));
+		ask.append(el('code', 'approval-command', step.approval.command));
+		const actions = el('div', 'approval-actions');
+		const decide = (decision: 'run' | 'always' | 'skip') => post({ type: 'approve', stepId: step.id, decision });
+		const run = el('button', destructive ? 'primary danger' : 'primary', 'Run');
+		run.type = 'button';
+		run.addEventListener('click', () => decide('run'));
+		actions.append(run);
+		if (!destructive) {
+			const always = el('button', 'secondary', 'Always allow');
+			always.type = 'button';
+			always.title = 'Run this exact command without asking from now on, in this project';
+			always.addEventListener('click', () => decide('always'));
+			actions.append(always);
+		}
+		const skip = el('button', 'secondary', 'Skip');
+		skip.type = 'button';
+		skip.addEventListener('click', () => decide('skip'));
+		actions.append(skip);
+		ask.append(actions);
+		card.append(ask);
+	}
+	return card;
+}
+
+function renderSteps(turn: TurnView): HTMLElement {
+	const list = el('div', 'steps');
+	for (const step of turn.steps ?? []) {
+		if (step.kind === 'tool') {
+			list.append(renderToolStep(step));
+		} else if (step.text) {
+			const body = el('div', 'assistant-body');
+			renderMarkdownInto(body, step.text);
+			list.append(body);
+		}
+	}
+	const streaming = state?.streamingTurnId === turn.id;
+	const last = turn.steps?.[turn.steps.length - 1];
+	if (streaming && (!last || (last.kind === 'tool' && last.status !== 'awaiting'))) {
+		list.append(el('div', 'thinking', last ? 'Working' : 'Thinking'));
+	}
+	return list;
+}
+
+function renderChanges(turn: TurnView, changes: readonly ChangeView[]): HTMLElement {
+	const box = el('div', `changes${turn.undone ? ' undone' : ''}`);
+	const head = el('div', 'changes-head');
+	head.append(el('span', 'changes-title', turn.undone ? `Undid changes to ${changes.length} file${changes.length === 1 ? '' : 's'}` : `Changed ${changes.length} file${changes.length === 1 ? '' : 's'}`));
+	head.append(el('span', 'spacer'));
+	if (turn.canUndo) {
+		const undo = el('button', 'link-button', 'Undo all');
+		undo.type = 'button';
+		undo.title = 'Put every file back the way it was before this turn';
+		undo.addEventListener('click', () => post({ type: 'undoChanges', turnId: turn.id }));
+		head.append(undo);
+	}
+	box.append(head);
+	for (const change of changes) {
+		const row = el('button', 'change-row');
+		row.type = 'button';
+		row.title = turn.undone ? `Open ${change.path}` : `Review the changes to ${change.path}`;
+		row.addEventListener('click', () => post({ type: 'reviewChange', turnId: turn.id, path: change.path }));
+		row.append(el('span', 'change-path', change.path));
+		if (change.created) {
+			row.append(el('span', 'change-new', 'new'));
+		}
+		row.append(el('span', 'spacer'), el('span', 'change-added', `+${change.added}`), el('span', 'change-removed', `−${change.removed}`));
+		box.append(row);
+	}
+	return box;
 }
 
 function renderEmpty(current: ChatState): HTMLElement {
@@ -192,9 +329,13 @@ function renderEmpty(current: ChatState): HTMLElement {
 		empty.append(add);
 		return empty;
 	}
-	empty.append(el('div', 'empty-title', 'Ask anything about your code'));
+	const agent = current.mode === 'agent';
+	empty.append(el('div', 'empty-title', agent ? 'Give the agent a task' : 'Ask anything about your code'));
 	const tips = el('ul', 'empty-tips');
-	for (const tip of ['The open file is sent with your message. Remove its chip to leave it out.', 'Select code and press Cmd+L (Ctrl+L) to add it here.', 'Type @ to add another file.']) {
+	const lines = agent
+		? ['It reads and searches your project, edits files and runs commands such as tests.', 'Commands that are not read-only wait for your approval.', 'When it is done, review each changed file or undo everything in one click.']
+		: ['The open file is sent with your message. Remove its chip to leave it out.', 'Select code and press Cmd+L (Ctrl+L) to add it here.', 'Type @ to add another file. Switch to Agent below for multi-step tasks.'];
+	for (const tip of lines) {
 		tips.append(el('li', undefined, tip));
 	}
 	empty.append(tips);
@@ -284,6 +425,10 @@ function render(): void {
 	}
 	renderChips(state);
 	renderModels(state);
+	modeSelect.value = state.mode;
+	input.placeholder = state.mode === 'agent' ? 'Describe a task, e.g. fix the failing test in dates.ts' : 'Ask about your code. Type @ to add a file.';
+	warning.textContent = state.agentWarning ?? '';
+	warning.hidden = !state.agentWarning;
 	sendButton.innerHTML = state.busy ? ICONS.stop : ICONS.send;
 	sendButton.title = state.busy ? 'Stop' : 'Send (Enter)';
 	sendButton.setAttribute('aria-label', state.busy ? 'Stop' : 'Send');
@@ -356,6 +501,10 @@ input.addEventListener('input', () => {
 	autosize();
 	updateSendEnabled();
 	vscode.setState({ draft: input.value });
+});
+
+modeSelect.addEventListener('change', () => {
+	post({ type: 'setMode', mode: modeSelect.value === 'agent' ? 'agent' : 'ask' });
 });
 
 modelSelect.addEventListener('change', () => {

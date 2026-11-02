@@ -205,7 +205,7 @@ export async function addModel(store: ModelStore): Promise<string | undefined> {
 		const report = await runTest(config);
 
 		if (report.streaming) {
-			await store.save(config);
+			await store.save(config, { toolCalling: report.toolCalling });
 			await store.setChatModel(config.id);
 			void vscode.window.showInformationMessage(`Added ${config.displayName}. ${describeReport(report)}`);
 			return config.id;
@@ -236,6 +236,7 @@ export async function retestModel(store: ModelStore, id: string): Promise<void> 
 	}
 	const report = await runTest(config);
 	if (report.streaming) {
+		await store.save(config, { toolCalling: report.toolCalling });
 		void vscode.window.showInformationMessage(`${config.displayName} works. ${describeReport(report)}`);
 	} else {
 		void vscode.window.showErrorMessage(`${config.displayName} failed: ${report.error?.message ?? 'unknown error'}`);

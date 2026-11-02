@@ -61,6 +61,21 @@ test('picks the first model for chat and moves on when it is removed', async () 
 	assert.ok(changes >= 4);
 });
 
+test('inline edits follow the chat model unless given their own', async () => {
+	const store = new ModelStore(new MemoryState(), new MemorySecrets());
+	await store.save(model);
+	await store.save({ ...model, id: 'fast', displayName: 'Fast' });
+	assert.equal(store.editModelId(), 'a');
+	assert.equal(store.hasOwnEditModel(), false);
+	await store.setEditModel('fast');
+	assert.equal(store.editModelId(), 'fast');
+	await store.setChatModel('a');
+	assert.equal(store.editModelId(), 'fast');
+	await store.remove('fast');
+	assert.equal(store.editModelId(), 'a');
+	assert.equal(store.hasOwnEditModel(), false);
+});
+
 test('saving without a key removes the old key', async () => {
 	const secrets = new MemorySecrets();
 	const store = new ModelStore(new MemoryState(), secrets);

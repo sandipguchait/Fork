@@ -1,8 +1,8 @@
 {
 	"name": "fork-ai",
 	"displayName": "Fork AI",
-	"description": "Chat with your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
-	"version": "0.1.0",
+	"description": "Chat, inline edits and an agent on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
+	"version": "0.3.0",
 	"publisher": "fork",
 	"license": "MIT",
 	"private": true,
@@ -80,6 +80,43 @@
 				"title": "Manage Models",
 				"category": "Fork AI",
 				"icon": "$(gear)"
+			},
+			{
+				"command": "forkAi.inlineEdit",
+				"title": "Edit with AI",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.acceptAllEdits",
+				"title": "Accept All AI Changes",
+				"category": "Fork AI",
+				"icon": "$(check-all)"
+			},
+			{
+				"command": "forkAi.rejectAllEdits",
+				"title": "Reject All AI Changes",
+				"category": "Fork AI",
+				"icon": "$(close-all)"
+			},
+			{
+				"command": "forkAi.acceptEdit",
+				"title": "Accept AI Change",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.rejectEdit",
+				"title": "Reject AI Change",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.cancelEdit",
+				"title": "Cancel AI Edit",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.applyCode",
+				"title": "Apply Code from Chat",
+				"category": "Fork AI"
 			}
 		],
 		"menus": {
@@ -102,9 +139,14 @@
 			],
 			"editor/context": [
 				{
+					"command": "forkAi.inlineEdit",
+					"when": "!editorReadonly",
+					"group": "1_forkAi@1"
+				},
+				{
 					"command": "forkAi.addSelectionToChat",
 					"when": "editorHasSelection",
-					"group": "1_forkAi"
+					"group": "1_forkAi@2"
 				}
 			],
 			"explorer/context": [
@@ -112,6 +154,48 @@
 					"command": "forkAi.addFileToChat",
 					"when": "!explorerResourceIsFolder",
 					"group": "1_forkAi"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "forkAi.acceptEdit",
+					"when": "false"
+				},
+				{
+					"command": "forkAi.rejectEdit",
+					"when": "false"
+				},
+				{
+					"command": "forkAi.applyCode",
+					"when": "false"
+				},
+				{
+					"command": "forkAi.acceptAllEdits",
+					"when": "forkAi.reviewing"
+				},
+				{
+					"command": "forkAi.rejectAllEdits",
+					"when": "forkAi.reviewing"
+				},
+				{
+					"command": "forkAi.cancelEdit",
+					"when": "forkAi.generating"
+				},
+				{
+					"command": "forkAi.inlineEdit",
+					"when": "editorIsOpen && !editorReadonly"
+				}
+			],
+			"editor/title": [
+				{
+					"command": "forkAi.acceptAllEdits",
+					"when": "forkAi.reviewing",
+					"group": "navigation@1"
+				},
+				{
+					"command": "forkAi.rejectAllEdits",
+					"when": "forkAi.reviewing",
+					"group": "navigation@2"
 				}
 			]
 		},
@@ -127,6 +211,29 @@
 				"key": "ctrl+l",
 				"mac": "cmd+l",
 				"when": "!editorTextFocus || !editorHasSelection"
+			},
+			{
+				"command": "forkAi.inlineEdit",
+				"key": "ctrl+i",
+				"mac": "cmd+i",
+				"when": "editorTextFocus && !editorReadonly"
+			},
+			{
+				"command": "forkAi.acceptAllEdits",
+				"key": "ctrl+enter",
+				"mac": "cmd+enter",
+				"when": "editorTextFocus && forkAi.reviewing"
+			},
+			{
+				"command": "forkAi.rejectAllEdits",
+				"key": "ctrl+backspace",
+				"mac": "cmd+backspace",
+				"when": "editorTextFocus && forkAi.reviewing"
+			},
+			{
+				"command": "forkAi.cancelEdit",
+				"key": "escape",
+				"when": "editorTextFocus && forkAi.generating"
 			}
 		],
 		"configuration": {

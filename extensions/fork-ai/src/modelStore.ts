@@ -17,10 +17,15 @@ export interface SecretStore {
 }
 
 /** What is kept in settings storage: everything except the key, which lives in the OS keychain. */
-export type StoredModel = Omit<ModelConfig, 'apiKey'> & { readonly hasKey: boolean };
+export type StoredModel = Omit<ModelConfig, 'apiKey'> & {
+	readonly hasKey: boolean;
+	/** From the last connection test: whether the model can call tools, which the agent needs. */
+	readonly toolCalling?: boolean;
+};
 
 const MODELS_KEY = 'forkAi.models';
 const CHAT_MODEL_KEY = 'forkAi.chatModel';
+const EDIT_MODEL_KEY = 'forkAi.editModel';
 const secretKey = (id: string) => `forkAi.apiKey.${id}`;
 
 export class ModelStore {
@@ -42,7 +47,7 @@ export class ModelStore {
 	}
 
 	/** Adds or replaces a model. An empty or missing key removes the stored key. */
-	async save(config: ModelConfig): Promise<void> {
+	async save(config: ModelConfig, tested?: { readonly toolCalling?: boolean }): Promise<void> {
 		const { apiKey, ...rest } = config;
 		if (apiKey) {
 			await this.secrets.store(secretKey(config.id), apiKey);
@@ -50,8 +55,9 @@ export class ModelStore {
 			await this.secrets.delete(secretKey(config.id));
 		}
 		const models = this.list();
-		const stored: StoredModel = { ...rest, hasKey: Boolean(apiKey) };
 		const index = models.findIndex(model => model.id === config.id);
+		const toolCalling = tested?.toolCalling ?? models[index]?.toolCalling;
+		const stored: StoredModel = { ...rest, hasKey: Boolean(apiKey), ...(toolCalling !== undefined ? { toolCalling } : {}) };
 		if (index === -1) {
 			models.push(stored);
 		} else {
@@ -71,6 +77,9 @@ export class ModelStore {
 		if (this.state.get<string>(CHAT_MODEL_KEY) === id) {
 			await this.state.update(CHAT_MODEL_KEY, models[0]?.id);
 		}
+		if (this.state.get<string>(EDIT_MODEL_KEY) === id) {
+			await this.state.update(EDIT_MODEL_KEY, undefined);
+		}
 		this.fire();
 	}
 
@@ -80,7 +89,7 @@ export class ModelStore {
 		if (!stored) {
 			return undefined;
 		}
-		const { hasKey, ...rest } = stored;
+		const { hasKey, toolCalling: _toolCalling, ...rest } = stored;
 		const apiKey = hasKey ? await this.secrets.get(secretKey(id)) : undefined;
 		return apiKey ? { ...rest, apiKey } : rest;
 	}
@@ -97,6 +106,26 @@ export class ModelStore {
 			return;
 		}
 		await this.state.update(CHAT_MODEL_KEY, id);
+		this.fire();
+	}
+
+	/** The model inline edits use: the one picked for edits, else the chat model. */
+	editModelId(): string | undefined {
+		const chosen = this.state.get<string>(EDIT_MODEL_KEY);
+		return chosen && this.get(chosen) ? chosen : this.chatModelId();
+	}
+
+	/** Whether inline edits use a model of their own rather than following the chat model. */
+	hasOwnEditModel(): boolean {
+		const chosen = this.state.get<string>(EDIT_MODEL_KEY);
+		return Boolean(chosen && this.get(chosen));
+	}
+
+	async setEditModel(id: string | undefined): Promise<void> {
+		if (id !== undefined && !this.get(id)) {
+			return;
+		}
+		await this.state.update(EDIT_MODEL_KEY, id);
 		this.fire();
 	}
 

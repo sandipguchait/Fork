@@ -4,14 +4,19 @@
 
 import * as vscode from 'vscode';
 import { createModelClient, ModelRouterError } from '../../../fork/model-router/src/index.ts';
-import { attachmentLabel, buildMessages, currentFileLabel, renderContext, SYSTEM_PROMPT, type Attachment, type EditorContext } from './context.ts';
-import { ChatHistory, newId, newSession, titleFor, type ChatSession, type ChatTurn } from './history.ts';
+import { readRules, restoreCheckpoint, runAgentTurn, summarizeChanges, withRules } from './agent/agentTurn.ts';
+import type { ApprovalDecision } from './agent/workspaceTools.ts';
+import { attachmentLabel, buildMessages, currentFileLabel, HISTORY_BUDGET_CHARS, renderContext, SYSTEM_PROMPT, type Attachment, type EditorContext } from './context.ts';
+import { ChatHistory, newId, newSession, titleFor, type AgentStepRecord, type ChatSession, type ChatTurn } from './history.ts';
 import { modelDetail } from './manageModels.ts';
-import type { ModelStore } from './modelStore.ts';
-import type { ChatState, ContextChip, FromWebview, ToWebview } from './protocol.ts';
+import type { KeyValueStore, ModelStore } from './modelStore.ts';
+import type { ChatMode, ChatState, ContextChip, FromWebview, ToWebview } from './protocol.ts';
 
 export const CHAT_VIEW_ID = 'forkAi.chat';
 const MAX_ATTACHED_FILE_BYTES = 512 * 1024;
+const CHECKPOINT_SCHEME = 'fork-ai-checkpoint';
+const MODE_KEY = 'forkAi.mode';
+const ALLOWED_COMMANDS_KEY = 'forkAi.allowedCommands';
 
 function nonce(): string {
 	let text = '';
@@ -45,16 +50,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 	private abort: AbortController | undefined;
 	private streamingTurnId: string | undefined;
 	private stateTimer: ReturnType<typeof setTimeout> | undefined;
+	private liveTimer: ReturnType<typeof setTimeout> | undefined;
+	private mode: ChatMode;
+	private readonly approvals = new Map<string, (decision: ApprovalDecision) => void>();
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
 		private readonly store: ModelStore,
 		private readonly history: ChatHistory,
+		private readonly workspaceState: KeyValueStore,
 	) {
 		this.session = history.current() ?? newSession();
 		this.lastEditor = vscode.window.activeTextEditor;
+		this.mode = workspaceState.get<ChatMode>(MODE_KEY) === 'agent' ? 'agent' : 'ask';
 		this.disposables.push(
+			// The left side of Review: a file as it was before the agent's turn.
+			vscode.workspace.registerTextDocumentContentProvider(CHECKPOINT_SCHEME, {
+				provideTextDocumentContent: uri => {
+					const turn = this.session.turns.find(candidate => candidate.id === uri.query);
+					return turn?.checkpoint?.[uri.path.replace(/^\//, '')] ?? '';
+				},
+			}),
 			store.onDidChange(() => this.postState()),
 			vscode.window.onDidChangeActiveTextEditor(editor => {
 				if (editor) {
@@ -92,6 +109,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 	dispose(): void {
 		this.abort?.abort();
 		clearTimeout(this.stateTimer);
+		clearTimeout(this.liveTimer);
 		vscode.Disposable.from(...this.disposables).dispose();
 	}
 
@@ -211,10 +229,102 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			case 'insertCode':
 				await this.insertCode(message.code);
 				break;
+			case 'applyCode':
+				await vscode.commands.executeCommand('forkAi.applyCode', message.code);
+				break;
 			case 'newChat':
 				await this.newChat();
 				break;
+			case 'setMode':
+				this.mode = message.mode === 'agent' ? 'agent' : 'ask';
+				await this.workspaceState.update(MODE_KEY, this.mode);
+				this.postState();
+				break;
+			case 'approve':
+				this.approvals.get(message.stepId)?.(message.decision);
+				break;
+			case 'reviewChange':
+				await this.reviewChange(message.turnId, message.path);
+				break;
+			case 'undoChanges':
+				await this.undoChanges(message.turnId);
+				break;
 		}
+	}
+
+	private root(): vscode.Uri | undefined {
+		return vscode.workspace.workspaceFolders?.[0]?.uri;
+	}
+
+	private async reviewChange(turnId: string, path: string): Promise<void> {
+		const root = this.root();
+		const turn = this.session.turns.find(candidate => candidate.id === turnId);
+		if (!root || !turn) {
+			return;
+		}
+		const current = vscode.Uri.joinPath(root, ...path.split('/'));
+		if (!turn.checkpoint) {
+			await vscode.window.showTextDocument(current);
+			return;
+		}
+		const before = vscode.Uri.from({ scheme: CHECKPOINT_SCHEME, path: `/${path}`, query: turnId });
+		await vscode.commands.executeCommand('vscode.diff', before, current, `${path} (before ↔ after the agent)`);
+	}
+
+	private async undoChanges(turnId: string): Promise<void> {
+		const root = this.root();
+		const turn = this.session.turns.find(candidate => candidate.id === turnId);
+		if (!root || !turn?.checkpoint || turn.undone) {
+			return;
+		}
+		const count = Object.keys(turn.checkpoint).length;
+		const answer = await vscode.window.showWarningMessage(
+			`Undo the agent's changes to ${count} file${count === 1 ? '' : 's'}?`,
+			{ modal: true, detail: 'Each file goes back to how it was before this turn, including any edits you made since. Files the agent created go to the trash.' },
+			'Undo Changes',
+		);
+		if (answer !== 'Undo Changes') {
+			return;
+		}
+		const failed = await restoreCheckpoint(root, turn.checkpoint);
+		if (failed.length) {
+			void vscode.window.showErrorMessage(`Could not restore: ${failed.join(', ')}`);
+		}
+		turn.undone = true;
+		turn.checkpoint = undefined;
+		await this.history.save(this.session);
+		this.postState();
+	}
+
+	private allowedCommands(): readonly string[] {
+		return this.workspaceState.get<string[]>(ALLOWED_COMMANDS_KEY) ?? [];
+	}
+
+	private async allowAlways(command: string): Promise<void> {
+		const allowed = new Set(this.allowedCommands());
+		allowed.add(command);
+		await this.workspaceState.update(ALLOWED_COMMANDS_KEY, [...allowed]);
+	}
+
+	private askApproval(step: AgentStepRecord, command: string, allowAlways: boolean): Promise<ApprovalDecision> {
+		step.status = 'awaiting';
+		step.approval = { command, allowAlways };
+		this.postState();
+		void this.reveal();
+		return new Promise(resolve => {
+			this.approvals.set(step.id, decision => {
+				this.approvals.delete(step.id);
+				step.status = 'running';
+				step.approval = undefined;
+				this.postState();
+				resolve(decision === 'always' && !allowAlways ? 'run' : decision);
+			});
+		});
+	}
+
+	/** The editor chat actions (Insert, Apply) act on: the last text editor the user worked in. */
+	targetEditor(): vscode.TextEditor | undefined {
+		return this.lastEditor && !this.lastEditor.document.isClosed ? this.lastEditor : undefined;
 	}
 
 	private async insertCode(code: string): Promise<void> {
@@ -232,6 +342,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
 	private stop(): void {
 		this.abort?.abort();
+		for (const resolve of [...this.approvals.values()]) {
+			resolve('skip');
+		}
 	}
 
 	private editorContext(): EditorContext | undefined {
@@ -280,9 +393,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		this.streamingTurnId = reply.id;
 		this.postState();
 
+		if (this.mode === 'agent') {
+			await this.runAgent(config, reply, abort);
+			return;
+		}
+
 		try {
 			const client = createModelClient(config);
-			const stream = client.stream({ system: SYSTEM_PROMPT, messages: buildMessages(this.session.turns.slice(0, -1)), signal: abort.signal });
+			const rules = await readRules(this.root());
+			const stream = client.stream({ system: withRules(SYSTEM_PROMPT, rules), messages: buildMessages(this.session.turns.slice(0, -1)), signal: abort.signal });
 			for await (const event of stream) {
 				if (event.type === 'text') {
 					reply.text += event.text;
@@ -297,6 +416,43 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				reply.error = errorText(error, local);
 			}
 		} finally {
+			this.abort = undefined;
+			this.streamingTurnId = undefined;
+			this.session.updatedAt = Date.now();
+			await this.history.save(this.session);
+			this.postState();
+		}
+	}
+
+	private async runAgent(config: Awaited<ReturnType<ModelStore['resolve']>> & object, reply: ChatTurn, abort: AbortController): Promise<void> {
+		const root = this.root();
+		try {
+			if (!root) {
+				reply.error = 'Open a folder to use the agent: it works on the files in your project.';
+				return;
+			}
+			reply.steps = [];
+			reply.checkpoint = {};
+			await runAgentTurn({
+				config,
+				root,
+				reply,
+				messages: buildMessages(this.session.turns.slice(0, -1), HISTORY_BUDGET_CHARS, { includeTools: true }),
+				signal: abort.signal,
+				allowedCommands: () => this.allowedCommands(),
+				allowAlways: command => this.allowAlways(command),
+				askApproval: (step, command, allowAlways) => this.askApproval(step, command, allowAlways),
+				onUpdate: () => this.postStateLive(),
+			});
+		} catch (error) {
+			if (!(error instanceof ModelRouterError && error.kind === 'aborted')) {
+				const local = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(config.baseUrl);
+				reply.error = errorText(error, local);
+			}
+		} finally {
+			if (root && reply.checkpoint) {
+				reply.changes = await summarizeChanges(root, reply.checkpoint);
+			}
 			this.abort = undefined;
 			this.streamingTurnId = undefined;
 			this.session.updatedAt = Date.now();
@@ -328,17 +484,55 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		return {
 			models: this.store.list().map(model => ({ id: model.id, name: model.displayName, detail: modelDetail(model) })),
 			selectedModelId: this.store.chatModelId(),
-			turns: this.session.turns.map(turn => ({ id: turn.id, role: turn.role, text: turn.text, chips: turn.chips, error: turn.error, modelName: turn.modelName })),
+			turns: this.session.turns.map(turn => ({
+				id: turn.id,
+				role: turn.role,
+				text: turn.text,
+				chips: turn.chips,
+				error: turn.error,
+				modelName: turn.modelName,
+				steps: turn.steps?.map(step => ({ id: step.id, kind: step.kind, text: step.text, status: step.status, detail: step.detail, approval: step.approval })),
+				changes: turn.changes,
+				canUndo: Boolean(turn.checkpoint && turn.changes?.length) && !turn.undone,
+				undone: turn.undone,
+			})),
 			currentFile,
 			currentFileExcluded: this.currentFileExcluded,
 			attachments: this.attachments.map(attachment => ({ id: attachment.id, kind: attachment.kind, label: attachmentLabel(attachment), title: attachment.path })),
 			busy: Boolean(this.abort),
 			streamingTurnId: this.streamingTurnId,
+			mode: this.mode,
+			agentWarning: this.agentWarning(),
 		};
+	}
+
+	private agentWarning(): string | undefined {
+		if (this.mode !== 'agent') {
+			return undefined;
+		}
+		if (!this.root()) {
+			return 'Open a folder to use the agent.';
+		}
+		const modelId = this.store.chatModelId();
+		const model = modelId ? this.store.get(modelId) : undefined;
+		if (model?.toolCalling === false) {
+			return `${model.displayName} did not pass the tool-calling test, so it may not work as an agent. Pick another model, or retest it in Manage Models.`;
+		}
+		return undefined;
 	}
 
 	private post(message: ToWebview): void {
 		void this.view?.webview.postMessage(message);
+	}
+
+	/** Agent steps change many times a second while streaming; send at most every 80 ms. */
+	private postStateLive(): void {
+		if (!this.liveTimer) {
+			this.liveTimer = setTimeout(() => {
+				this.liveTimer = undefined;
+				this.postState();
+			}, 80);
+		}
 	}
 
 	private postState(): void {

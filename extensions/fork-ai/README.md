@@ -1,6 +1,6 @@
 # Fork AI
 
-Fork's built-in AI: chat and inline edits with your own models. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
+Fork's built-in AI: chat, inline edits and an agent, all with your own models. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
 
 ## Use it
 
@@ -31,6 +31,25 @@ Every step is an ordinary edit, so Cmd+Z works throughout. Typing inside a chang
 
 Cmd+I replaces VS Code's alternative shortcut for suggestions on macOS; Ctrl+Space still opens suggestions. Cmd+K is left alone because VS Code uses it to start many two-key shortcuts.
 
+## Agent mode
+
+Switch the chat's **Ask / Agent** menu to **Agent** and describe a task, for example "fix the failing test in dates.ts". The agent works step by step with these tools:
+
+| Tool | What it does | Asks first? |
+| --- | --- | --- |
+| `read_file`, `list_files`, `search` | Reads, lists and searches the project; skips `node_modules`, `.git` and build output | No |
+| `edit_file`, `create_file` | Exact-text edits and new files, saved so tests see them | No; every file is checkpointed first |
+| `run_command` | Runs a shell command in the project root, 120 s limit | Yes, except read-only basics (`git status`, `ls`, `cat` …) and commands you chose **Always allow** for |
+
+- Each step appears as a card; click a card to see its output.
+- Commands that look destructive (`rm -rf`, `sudo`, `git push --force`, `git reset --hard`, piping a download into a shell, and similar) always ask, with no **Always allow**.
+- Commands that chain others (`;`, `&&`, `|`) ask unless you allowed that exact command.
+- When the turn ends, **Changed N files** lists each file with its line counts. Click a file to see a diff against the checkpoint; **Undo all** puts every file back, and files the agent created go to the trash. Changes made by commands themselves, such as a code generator, are not checkpointed.
+- **Stop** ends the run at once; a command waiting for approval is skipped.
+- Rules in `.fork/rules.md`, `AGENTS.md` or `.cursorrules` (first one found) are added to the instructions, in Ask mode too.
+- Agent mode needs a model that passed the tool-calling test when it was added. If it failed, the chat warns you.
+- The agent stops after 25 steps; send another message to let it continue.
+
 ## Where things are stored
 
 | What | Where |
@@ -38,6 +57,8 @@ Cmd+I replaces VS Code's alternative shortcut for suggestions on macOS; Ctrl+Spa
 | API keys | The OS keychain, via VS Code's SecretStorage |
 | Model settings (URL, model name, format) | Global extension storage, shared across workspaces |
 | Chats | Workspace storage, the newest 50 per project |
+| Agent checkpoints | Memory only: **Undo all** works until the window reloads |
+| Commands you chose **Always allow** for, and the Ask/Agent choice | Workspace storage, per project |
 
 ## Layout
 
@@ -45,6 +66,7 @@ Cmd+I replaces VS Code's alternative shortcut for suggestions on macOS; Ctrl+Spa
 | --- | --- |
 | `src/extension.ts` | Activation and commands |
 | `src/chatView.ts` | The chat webview provider: context, streaming, history, Insert/Copy |
+| `src/agent/` | Agent mode: tools and approvals, the loop, workspace tools and checkpoints, one agent turn |
 | `src/inlineEdit.ts` | Cmd+I and Apply: the prompt, the in-place red/green review, Accept and Reject |
 | `src/diff.ts`, `src/editPrompt.ts` | The line diff and the edit prompt, unit-tested without VS Code |
 | `src/addModel.ts`, `src/manageModels.ts` | The Add model flow and the model list |

@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const store = new ModelStore(context.globalState, context.secrets);
 	// Chats belong to the project they were about.
 	const history = new ChatHistory(context.workspaceState);
-	const chat = new ChatViewProvider(context.extensionUri, store, history);
+	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState);
 	const inlineEdit = new InlineEditController(store);
 
 	context.subscriptions.push(

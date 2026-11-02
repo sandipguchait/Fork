@@ -113,3 +113,18 @@ export function resolve(layout: CombinedLayout, decide: (hunk: Hunk, index: numb
 	out.push(...layout.lines.slice(cursor));
 	return out;
 }
+
+/** Lines added and removed between two versions of a file, for the "files changed" summary. */
+export function countChanges(before: string | null, after: string | null): { added: number; removed: number } {
+	const split = (text: string | null) => text === null || text === '' ? [] : text.split(/\r?\n/);
+	let added = 0;
+	let removed = 0;
+	for (const op of diffLines(split(before), split(after))) {
+		if (op.type === 'added') {
+			added++;
+		} else if (op.type === 'removed') {
+			removed++;
+		}
+	}
+	return { added, removed };
+}

@@ -1,8 +1,8 @@
 {
 	"name": "fork-ai",
 	"displayName": "Fork AI",
-	"description": "Chat with your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
-	"version": "0.2.0",
+	"description": "Chat, inline edits and an agent on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
+	"version": "0.3.0",
 	"publisher": "fork",
 	"license": "MIT",
 	"private": true,

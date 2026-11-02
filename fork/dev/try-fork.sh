@@ -78,6 +78,7 @@ Fork is starting. To try it:
   1. Cmd+L opens the chat. Click "Add a model" and choose "Custom endpoint".
   2. URL: http://127.0.0.1:$PORT/v1 · format: OpenAI-compatible · key: leave empty · model: fake-coder
   3. Ask something in chat. Select code in src/dates.ts, press Cmd+I and describe a change.
+  4. Switch the chat to Agent and ask it to fix parseDate: it edits the file and asks before running the tests.
 Close the Fork window to stop.
 EOF
 

@@ -679,6 +679,9 @@ const esbuildMediaScripts: { script: string; tsconfig: string }[] = [
 	{ script: 'mermaid-markdown-features/esbuild.webview.mts', tsconfig: 'mermaid-markdown-features/preview-src/tsconfig.json' },
 	{ script: 'notebook-renderers/esbuild.notebook.mts', tsconfig: 'notebook-renderers/tsconfig.json' },
 	{ script: 'simple-browser/esbuild.webview.mts', tsconfig: 'simple-browser/preview-src/tsconfig.json' },
+	// Fork AI: the extension bundle (it includes fork/model-router) and the chat webview.
+	{ script: 'fork-ai/esbuild.mts', tsconfig: 'fork-ai/tsconfig.json' },
+	{ script: 'fork-ai/esbuild.webview.mts', tsconfig: 'fork-ai/webview-src/tsconfig.json' },
 ];
 
 export function buildExtensionMedia(isWatch: boolean, outputRoot?: string): Promise<void> {

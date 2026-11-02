@@ -2,7 +2,7 @@
  *  Fork AI. Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ChatMessage } from '../../../fork/model-router/src/index.ts';
+import type { ChatMessage, ContentPart } from '../../../fork/model-router/src/index.ts';
 import type { ChatTurn } from './history.ts';
 
 export interface SelectionRange {
@@ -109,17 +109,51 @@ export function renderContext(editor: EditorContext | undefined, attachments: re
  * Turns the chat so far into model messages. Each user turn carries the context it was sent with.
  * When the history is over budget, the oldest turns are dropped; the newest message always stays.
  */
-export function buildMessages(turns: readonly ChatTurn[], budgetChars = HISTORY_BUDGET_CHARS): ChatMessage[] {
-	const usable = turns.filter(turn => turn.role === 'user' || (turn.text && !turn.error));
-	const messages: ChatMessage[] = usable.map(turn => ({
-		role: turn.role,
-		content: turn.role === 'user' && turn.context ? `${turn.context}\n\n${turn.text}` : turn.text,
-	}));
+/** Tool results from earlier turns are cut to this when replayed, to save context. */
+export const REPLAYED_TOOL_RESULT_CHARS = 4000;
+
+function sizeOf(message: ChatMessage): number {
+	return typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length;
+}
+
+function partsOfContent(content: ChatMessage['content']): ContentPart[] {
+	return typeof content === 'string' ? (content ? [{ type: 'text', text: content }] : []) : [...content];
+}
+
+function replayed(message: ChatMessage): ChatMessage {
+	if (typeof message.content === 'string') {
+		return message;
+	}
+	return {
+		role: message.role,
+		content: message.content.map(part => part.type === 'tool_result' && part.content.length > REPLAYED_TOOL_RESULT_CHARS
+			? { ...part, content: part.content.slice(0, REPLAYED_TOOL_RESULT_CHARS) + '\n… [cut when replayed]' }
+			: part),
+	};
+}
+
+/**
+ * Turns the chat so far into model messages. Each user turn carries the context it was sent with.
+ * With `includeTools`, agent turns replay their tool calls and results; without (Ask mode), they
+ * collapse to their text, since providers reject tool messages when no tools are offered.
+ * When over budget, the oldest turns are dropped; the newest message always stays.
+ */
+export function buildMessages(turns: readonly ChatTurn[], budgetChars = HISTORY_BUDGET_CHARS, options: { includeTools?: boolean } = {}): ChatMessage[] {
+	const messages: ChatMessage[] = [];
+	for (const turn of turns) {
+		if (turn.role === 'user') {
+			messages.push({ role: 'user', content: turn.context ? `${turn.context}\n\n${turn.text}` : turn.text });
+		} else if (options.includeTools && turn.transcript?.length) {
+			messages.push(...turn.transcript.map(replayed));
+		} else if (turn.text && !turn.error) {
+			messages.push({ role: 'assistant', content: turn.text });
+		}
+	}
 
 	let total = 0;
 	let start = messages.length;
 	while (start > 0) {
-		const size = String(messages[start - 1].content).length;
+		const size = sizeOf(messages[start - 1]);
 		if (start < messages.length && total + size > budgetChars) {
 			break;
 		}
@@ -131,12 +165,14 @@ export function buildMessages(turns: readonly ChatTurn[], budgetChars = HISTORY_
 	while (kept.length > 1 && kept[0].role !== 'user') {
 		kept.shift();
 	}
-	// Two user messages in a row (after a failed reply) are merged so strict providers accept them.
+	// Two messages in a row from the same side (after a failed reply) are merged so strict providers accept them.
 	const merged: ChatMessage[] = [];
 	for (const message of kept) {
 		const previous = merged[merged.length - 1];
 		if (previous && previous.role === message.role) {
-			merged[merged.length - 1] = { role: message.role, content: `${previous.content}\n\n${message.content}` };
+			merged[merged.length - 1] = typeof previous.content === 'string' && typeof message.content === 'string'
+				? { role: message.role, content: `${previous.content}\n\n${message.content}` }
+				: { role: message.role, content: [...partsOfContent(previous.content), ...partsOfContent(message.content)] };
 		} else {
 			merged.push(message);
 		}

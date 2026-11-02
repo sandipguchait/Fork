@@ -2,6 +2,7 @@
  *  Fork AI. Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ChatMessage } from '../../../fork/model-router/src/index.ts';
 import type { KeyValueStore } from './modelStore.ts';
 
 export interface ChatTurn {
@@ -14,6 +15,28 @@ export interface ChatTurn {
 	readonly chips?: readonly string[];
 	error?: string;
 	readonly modelName?: string;
+	/** Agent turns: every model reply and tool result, replayed to the model on later agent turns. */
+	transcript?: ChatMessage[];
+	/** Agent turns: the steps shown in the chat. */
+	steps?: AgentStepRecord[];
+	/** Agent turns: files changed, with their content before the turn (null: the file was new). Kept in memory only. */
+	checkpoint?: Record<string, string | null>;
+	/** Agent turns: the files the turn changed, with line counts. */
+	changes?: { readonly path: string; readonly added: number; readonly removed: number; readonly created: boolean }[];
+	/** Agent turns: the user undid the changes. */
+	undone?: boolean;
+}
+
+export interface AgentStepRecord {
+	readonly id: string;
+	readonly kind: 'text' | 'tool';
+	text: string;
+	/** Tool steps: running, done, failed, skipped, or waiting for the user. */
+	status?: 'running' | 'done' | 'error' | 'skipped' | 'awaiting';
+	/** Tool steps: output shown when the card is expanded. */
+	detail?: string;
+	/** Tool steps awaiting approval: the command, and whether "Always allow" is offered. */
+	approval?: { readonly command: string; readonly allowAlways: boolean };
 }
 
 export interface ChatSession {
@@ -64,7 +87,9 @@ export class ChatHistory {
 		if (!session.turns.length) {
 			return;
 		}
-		const sessions = [session, ...this.list().filter(existing => existing.id !== session.id)]
+		// Checkpoints hold whole files; they stay in memory for Undo and are not written to storage.
+		const stored: ChatSession = { ...session, turns: session.turns.map(({ checkpoint: _checkpoint, ...turn }) => turn) };
+		const sessions = [stored, ...this.list().filter(existing => existing.id !== session.id)]
 			.sort((a, b) => b.updatedAt - a.updatedAt)
 			.slice(0, MAX_SESSIONS);
 		await this.state.update(SESSIONS_KEY, sessions);

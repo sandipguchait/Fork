@@ -1,0 +1,152 @@
+{
+	"name": "fork-ai",
+	"displayName": "Fork AI",
+	"description": "Chat with your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
+	"version": "0.1.0",
+	"publisher": "fork",
+	"license": "MIT",
+	"private": true,
+	"engines": {
+		"vscode": "^1.100.0"
+	},
+	"main": "./dist/extension",
+	"categories": [
+		"AI",
+		"Chat"
+	],
+	"extensionKind": [
+		"ui"
+	],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"contributes": {
+		"viewsContainers": {
+			"secondarySidebar": [
+				{
+					"id": "forkAi",
+					"title": "Fork AI",
+					"icon": "media/fork-ai.svg"
+				}
+			]
+		},
+		"views": {
+			"forkAi": [
+				{
+					"type": "webview",
+					"id": "forkAi.chat",
+					"name": "Chat"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "forkAi.openChat",
+				"title": "Open Chat",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.newChat",
+				"title": "New Chat",
+				"category": "Fork AI",
+				"icon": "$(add)"
+			},
+			{
+				"command": "forkAi.chatHistory",
+				"title": "Chat History",
+				"category": "Fork AI",
+				"icon": "$(history)"
+			},
+			{
+				"command": "forkAi.addSelectionToChat",
+				"title": "Add Selection to Chat",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.addFileToChat",
+				"title": "Add File to Chat",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.addModel",
+				"title": "Add Model",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.manageModels",
+				"title": "Manage Models",
+				"category": "Fork AI",
+				"icon": "$(gear)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "forkAi.newChat",
+					"when": "view == forkAi.chat",
+					"group": "navigation@1"
+				},
+				{
+					"command": "forkAi.chatHistory",
+					"when": "view == forkAi.chat",
+					"group": "navigation@2"
+				},
+				{
+					"command": "forkAi.manageModels",
+					"when": "view == forkAi.chat",
+					"group": "navigation@3"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "forkAi.addSelectionToChat",
+					"when": "editorHasSelection",
+					"group": "1_forkAi"
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "forkAi.addFileToChat",
+					"when": "!explorerResourceIsFolder",
+					"group": "1_forkAi"
+				}
+			]
+		},
+		"keybindings": [
+			{
+				"command": "forkAi.addSelectionToChat",
+				"key": "ctrl+l",
+				"mac": "cmd+l",
+				"when": "editorTextFocus && editorHasSelection"
+			},
+			{
+				"command": "forkAi.openChat",
+				"key": "ctrl+l",
+				"mac": "cmd+l",
+				"when": "!editorTextFocus || !editorHasSelection"
+			}
+		],
+		"configuration": {
+			"title": "Fork AI",
+			"properties": {
+				"forkAi.chat.includeCurrentFile": {
+					"type": "boolean",
+					"default": true,
+					"description": "Send the open file with each chat message. You can still remove it per message from the chat box."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"compile": "node ./esbuild.mts && node ./esbuild.webview.mts",
+		"watch": "node ./esbuild.mts --watch",
+		"test": "node --test test/*.test.ts"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/sandipguchait/Fork.git"
+	}
+}

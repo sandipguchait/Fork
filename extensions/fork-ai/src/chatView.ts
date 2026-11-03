@@ -11,6 +11,7 @@ import { ChatHistory, newId, newSession, titleFor, type AgentStepRecord, type Ch
 import type { CodebaseIndexService } from './index/service.ts';
 import { renderCodebaseBlock, takeCodebaseMention } from './index/snippets.ts';
 import { modelDetail } from './manageModels.ts';
+import type { McpManager } from './mcp/manager.ts';
 import type { KeyValueStore, ModelStore } from './modelStore.ts';
 import type { ChatMode, ChatState, ContextChip, FromWebview, ToWebview } from './protocol.ts';
 
@@ -65,6 +66,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		private readonly history: ChatHistory,
 		private readonly workspaceState: KeyValueStore,
 		private readonly codebase?: CodebaseIndexService,
+		private readonly mcp?: McpManager,
 	) {
 		this.session = history.current() ?? newSession();
 		this.lastEditor = vscode.window.activeTextEditor;
@@ -338,9 +340,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		await this.workspaceState.update(ALLOWED_COMMANDS_KEY, [...allowed]);
 	}
 
-	private askApproval(step: AgentStepRecord, command: string, allowAlways: boolean): Promise<ApprovalDecision> {
+	private askApproval(step: AgentStepRecord, command: string, allowAlways: boolean, kind: 'command' | 'tool' = 'command'): Promise<ApprovalDecision> {
 		step.status = 'awaiting';
-		step.approval = { command, allowAlways };
+		step.approval = { command, allowAlways, kind };
 		this.postState();
 		void this.reveal();
 		return new Promise(resolve => {
@@ -507,9 +509,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				signal: abort.signal,
 				allowedCommands: () => this.allowedCommands(),
 				allowAlways: command => this.allowAlways(command),
-				askApproval: (step, command, allowAlways) => this.askApproval(step, command, allowAlways),
+				askApproval: (step, command, allowAlways, kind) => this.askApproval(step, command, allowAlways, kind),
 				onUpdate: () => this.postStateLive(),
 				codebase: this.codebaseAvailable() ? this.codebase : undefined,
+				mcp: this.mcp,
 			});
 		} catch (error) {
 			if (!(error instanceof ModelRouterError && error.kind === 'aborted')) {

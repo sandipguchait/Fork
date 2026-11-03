@@ -245,18 +245,19 @@ function renderToolStep(step: StepView): HTMLElement {
 	if (step.approval) {
 		const ask = el('div', 'approval');
 		const destructive = !step.approval.allowAlways;
-		ask.append(el('div', 'approval-text', destructive ? 'This command can delete data or rewrite history. Run it?' : 'Run this command?'));
+		const tool = step.approval.kind === 'tool';
+		ask.append(el('div', 'approval-text', tool ? 'Use this MCP tool?' : destructive ? 'This command can delete data or rewrite history. Run it?' : 'Run this command?'));
 		ask.append(el('code', 'approval-command', step.approval.command));
 		const actions = el('div', 'approval-actions');
 		const decide = (decision: 'run' | 'always' | 'skip') => post({ type: 'approve', stepId: step.id, decision });
-		const run = el('button', destructive ? 'primary danger' : 'primary', 'Run');
+		const run = el('button', destructive ? 'primary danger' : 'primary', tool ? 'Allow' : 'Run');
 		run.type = 'button';
 		run.addEventListener('click', () => decide('run'));
 		actions.append(run);
 		if (!destructive) {
 			const always = el('button', 'secondary', 'Always allow');
 			always.type = 'button';
-			always.title = 'Run this exact command without asking from now on, in this project';
+			always.title = tool ? 'Use this tool without asking from now on, in this project' : 'Run this exact command without asking from now on, in this project';
 			always.addEventListener('click', () => decide('always'));
 			actions.append(always);
 		}
@@ -334,7 +335,7 @@ function renderEmpty(current: ChatState): HTMLElement {
 	empty.append(el('div', 'empty-title', agent ? 'Give the agent a task' : 'Ask anything about your code'));
 	const tips = el('ul', 'empty-tips');
 	const lines = agent
-		? ['It reads and searches your project, edits files and runs commands such as tests.', 'Commands that are not read-only wait for your approval.', 'When it is done, review each changed file or undo everything in one click.']
+		? ['It reads and searches your project, edits files, runs commands such as tests and uses your MCP tools.', 'Commands that are not read-only wait for your approval.', 'When it is done, review each changed file or undo everything in one click.']
 		: ['The open file is sent with your message. Remove its chip to leave it out.', 'Select code and press Cmd+L (Ctrl+L) to add it here.', 'Type @ to add a file, or Codebase to search the whole project. Switch to Agent below for multi-step tasks.'];
 	for (const tip of lines) {
 		tips.append(el('li', undefined, tip));

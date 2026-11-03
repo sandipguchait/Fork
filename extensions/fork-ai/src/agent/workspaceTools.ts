@@ -8,6 +8,9 @@ import type { ToolCallPart } from '../../../../fork/model-router/src/index.ts';
 import { approvalFor, type ApprovalNeed } from './approvals.ts';
 import type { ToolOutcome } from './loop.ts';
 import { formatForAgent, type Snippet } from '../index/snippets.ts';
+import { summarizeArguments } from '../mcp/naming.ts';
+import { isInside } from './paths.ts';
+import { sandboxedCommand, type SandboxKind, type SandboxPolicy } from './sandbox.ts';
 import { normalizeRelativePath, numberLines, replaceText, truncateOutput } from './tools.ts';
 
 export const EXCLUDE_GLOB = '{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**,**/.next/**,**/.venv/**,**/__pycache__/**}';
@@ -17,6 +20,15 @@ const MAX_SEARCH_RESULTS = 100;
 const COMMAND_TIMEOUT_MS = 120_000;
 
 export type ApprovalDecision = 'run' | 'always' | 'skip';
+
+/** MCP tools for one agent turn, as the agent's tool runner sees them. */
+export interface McpToolRunner {
+	/** The entry behind a model-facing tool name, or undefined when it is not an MCP tool. */
+	find(name: string): { readonly server: string; readonly tool: { readonly name: string } } | undefined;
+	isAllowed(name: string): boolean;
+	allowAlways(name: string): Promise<void>;
+	call(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<ToolOutcome>;
+}
 
 /** The project index, as the agent sees it. */
 export interface CodebaseSearch {
@@ -29,9 +41,12 @@ export interface ToolContext {
 	/** Content of each changed file before this turn; null when the agent created the file. */
 	readonly checkpoint: Record<string, string | null>;
 	readonly allowedCommands: () => readonly string[];
-	readonly requestApproval: (callId: string, command: string, need: Exclude<ApprovalNeed, 'none'>) => Promise<ApprovalDecision>;
+	readonly requestApproval: (callId: string, command: string, need: Exclude<ApprovalNeed, 'none'>, kind?: 'command' | 'tool') => Promise<ApprovalDecision>;
 	readonly allowAlways: (command: string) => Promise<void>;
 	readonly codebase?: CodebaseSearch;
+	readonly mcp?: McpToolRunner;
+	/** Where run_command runs: inside this sandbox, or (kind "none") directly. */
+	readonly sandbox?: { readonly kind: SandboxKind; readonly policy: SandboxPolicy };
 }
 
 const str = (value: unknown) => typeof value === 'string' ? value : undefined;
@@ -52,7 +67,7 @@ export class WorkspaceTools {
 			case 'edit_file': return this.editFile(str(args.path), str(args.old_text), str(args.new_text), args.replace_all === true);
 			case 'create_file': return this.createFile(str(args.path), str(args.content));
 			case 'run_command': return this.runCommand(call.id, str(args.command), signal);
-			default: return fail(`Unknown tool "${call.name}".`);
+			default: return this.context.mcp?.find(call.name) ? this.mcpCall(call, signal) : fail(`Unknown tool "${call.name}".`);
 		}
 	}
 
@@ -75,6 +90,14 @@ export class WorkspaceTools {
 		return { uri: vscode.Uri.joinPath(this.context.root, ...relative.split('/')), relative };
 	}
 
+	/** Refuses paths that a symlink takes outside the workspace. */
+	private async escapes(target: { uri: vscode.Uri; relative: string }): Promise<ToolOutcome | undefined> {
+		if (target.uri.scheme !== 'file' || await isInside(this.context.root.fsPath, target.uri.fsPath)) {
+			return undefined;
+		}
+		return fail(`${target.relative} is a link to somewhere outside the workspace. The agent only works inside the workspace.`);
+	}
+
 	private async stat(uri: vscode.Uri): Promise<vscode.FileStat | undefined> {
 		try {
 			return await vscode.workspace.fs.stat(uri);
@@ -87,6 +110,10 @@ export class WorkspaceTools {
 		const target = this.resolve(path);
 		if (!('uri' in target)) {
 			return target;
+		}
+		const outside = await this.escapes(target);
+		if (outside) {
+			return outside;
 		}
 		const stat = await this.stat(target.uri);
 		if (!stat) {
@@ -111,6 +138,23 @@ export class WorkspaceTools {
 		}
 		const shown = paths.slice(0, 500);
 		return { content: shown.join('\n') + (paths.length > 500 ? '\n… more files not shown. Use a narrower pattern.' : '') };
+	}
+
+	/** MCP tools ask first, like commands, unless the user allowed the tool or the config auto-approves it. */
+	private async mcpCall(call: ToolCallPart, signal: AbortSignal): Promise<ToolOutcome> {
+		const mcp = this.context.mcp!;
+		const entry = mcp.find(call.name)!;
+		if (!mcp.isAllowed(call.name)) {
+			const label = `${entry.server}: ${entry.tool.name} ${summarizeArguments(call.arguments)}`;
+			const decision = await this.context.requestApproval(call.id, label, 'ask', 'tool');
+			if (decision === 'skip') {
+				return { content: 'The user chose not to run this tool. Ask them, or try another way.', isError: true };
+			}
+			if (decision === 'always') {
+				await mcp.allowAlways(call.name);
+			}
+		}
+		return mcp.call(call.name, call.arguments, signal);
 	}
 
 	private async codebaseSearch(query: string | undefined, path: string | undefined, limit: number): Promise<ToolOutcome> {
@@ -154,6 +198,9 @@ export class WorkspaceTools {
 			const stat = await this.stat(uri);
 			if (!stat || stat.size > MAX_SEARCH_FILE_BYTES) {
 				continue;
+			}
+			if (uri.scheme === 'file' && !await isInside(this.context.root.fsPath, uri.fsPath)) {
+				continue; // Reached through a link to outside the workspace.
 			}
 			const bytes = await vscode.workspace.fs.readFile(uri);
 			if (bytes.subarray(0, 8000).includes(0)) {
@@ -202,6 +249,10 @@ export class WorkspaceTools {
 		if (oldText === undefined || newText === undefined) {
 			return fail('old_text and new_text are required.');
 		}
+		const outside = await this.escapes(target);
+		if (outside) {
+			return outside;
+		}
 		if (!await this.stat(target.uri)) {
 			return fail(`${target.relative} does not exist. Use create_file for new files.`);
 		}
@@ -225,6 +276,10 @@ export class WorkspaceTools {
 		}
 		if (content === undefined) {
 			return fail('content is required.');
+		}
+		const outside = await this.escapes(target);
+		if (outside) {
+			return outside;
 		}
 		const stat = await this.stat(target.uri);
 		if (stat && stat.type & vscode.FileType.Directory) {
@@ -261,17 +316,19 @@ export class WorkspaceTools {
 				await this.context.allowAlways(command.trim());
 			}
 		}
-		return runShell(command, this.context.root.fsPath, signal);
+		return runShell(command, this.context.root.fsPath, signal, COMMAND_TIMEOUT_MS, this.context.sandbox);
 	}
 }
 
 /** Runs a command in the user's shell, capturing stdout and stderr together. */
-export function runShell(command: string, cwd: string, signal: AbortSignal, timeoutMs = COMMAND_TIMEOUT_MS): Promise<ToolOutcome> {
+export function runShell(command: string, cwd: string, signal: AbortSignal, timeoutMs = COMMAND_TIMEOUT_MS, sandbox?: { readonly kind: SandboxKind; readonly policy: SandboxPolicy }): Promise<ToolOutcome> {
 	return new Promise(resolve => {
 		const windows = process.platform === 'win32';
 		const shell = windows ? (process.env.COMSPEC || 'cmd.exe') : (process.env.SHELL || '/bin/sh');
-		const args = windows ? ['/d', '/s', '/c', command] : ['-c', command];
-		const child = spawn(shell, args, { cwd, env: { ...process.env, CI: '1', FORCE_COLOR: '0', NO_COLOR: '1' }, windowsVerbatimArguments: windows });
+		const { file, args } = windows
+			? { file: shell, args: ['/d', '/s', '/c', command] }
+			: sandboxedCommand(sandbox?.kind ?? 'none', sandbox?.policy ?? { writable: [cwd], network: true }, shell, command, cwd);
+		const child = spawn(file, args, { cwd, env: { ...process.env, CI: '1', FORCE_COLOR: '0', NO_COLOR: '1' }, windowsVerbatimArguments: windows });
 		let output = '';
 		let finished = false;
 		const append = (chunk: Buffer) => {

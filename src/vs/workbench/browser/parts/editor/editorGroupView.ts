@@ -28,6 +28,7 @@ import { DisposableStore, MutableDisposable, toDisposable } from '../../../../ba
 import { ITelemetryData, ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { DeferredPromise, Promises, RunOnceWorker } from '../../../../base/common/async.js';
 import { EventType as TouchEventType, GestureEvent } from '../../../../base/browser/touch.js';
+import { EditorGroupFooters, IEditorGroupFooter } from './editorGroupFooter.js';
 import { IEditorGroupsView, IEditorGroupView, fillActiveEditorViewState, EditorServiceImpl, IEditorGroupTitleHeight, IInternalEditorOpenOptions, IInternalMoveCopyOptions, IInternalEditorCloseOptions, IInternalEditorTitleControlOptions, IEditorPartsView, IEditorGroupViewOptions } from './editor.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -133,6 +134,7 @@ export class EditorGroupView extends Themable implements IEditorGroupView {
 
 	private readonly editorContainer: HTMLElement;
 	private readonly editorPane: EditorPanes;
+	private footer: IEditorGroupFooter | undefined;
 
 	/**
 	 * Optional inset (in px) reserved on the right of the editor pane while the
@@ -237,6 +239,13 @@ export class EditorGroupView extends Themable implements IEditorGroupView {
 
 			// Editor pane
 			this.editorPane = this._register(this.scopedInstantiationService.createInstance(EditorPanes, this.element, this.editorContainer, this));
+
+			// Footer under the editor (Meridian's time scrub)
+			if (EditorGroupFooters.factory) {
+				this.footer = this._register(EditorGroupFooters.factory(this.scopedInstantiationService, this));
+				this.element.appendChild(this.footer.element);
+				this._register(this.footer.onDidChangeHeight(() => this.relayout()));
+			}
 			this._onDidChange.input = this.editorPane.onDidChangeSizeConstraints;
 
 			// Track Focus
@@ -2265,10 +2274,16 @@ export class EditorGroupView extends Themable implements IEditorGroupView {
 
 		// The editor pane is inset on the right by `_contentRightInset` so a docked
 		// panel can sit beside it under the full-width title (0 = fill the group).
-		const editorHeight = Math.max(0, height - titleControlSize.height);
+		const footerHeight = this.footer ? Math.min(this.footer.height, Math.max(0, height - titleControlSize.height - this.editorPane.minimumHeight)) : 0;
+		const editorHeight = Math.max(0, height - titleControlSize.height - footerHeight);
 		this.editorContainer.style.width = `${contentWidth}px`;
 		this.editorContainer.style.height = `${editorHeight}px`;
 		this.editorPane.layout({ width: contentWidth, height: editorHeight, top: top + titleControlSize.height, left });
+		if (this.footer) {
+			this.footer.element.style.width = `${contentWidth}px`;
+			this.footer.element.style.height = `${footerHeight}px`;
+			this.footer.element.style.display = footerHeight ? '' : 'none';
+		}
 	}
 
 	/**

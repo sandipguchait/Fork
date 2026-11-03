@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { ModelRouterError, type ChatRequest, type StreamEvent, type ToolCallPart } from '../../../fork/model-router/src/index.ts';
 import { approvalFor, isDangerousCommand } from '../src/agent/approvals.ts';
 import { runAgent, type ToolOutcome } from '../src/agent/loop.ts';
-import { AGENT_TOOLS, agentTools, describeToolCall, MAX_READ_LINES, normalizeRelativePath, numberLines, replaceText, truncateOutput } from '../src/agent/tools.ts';
+import { AGENT_TOOLS, agentTools, describeToolCall, MAX_READ_LINES, normalizeRelativePath, numberLines, parsePlan, replaceText, truncateOutput } from '../src/agent/tools.ts';
 import { buildMessages } from '../src/context.ts';
 import type { ChatTurn } from '../src/history.ts';
 
@@ -41,8 +41,8 @@ test('reads come back numbered and capped', () => {
 });
 
 test('every tool has a schema and a readable card title', () => {
-	assert.deepEqual(AGENT_TOOLS.map(tool => tool.name), ['read_file', 'list_files', 'search', 'codebase_search', 'edit_file', 'create_file', 'run_command']);
-	assert.deepEqual(agentTools(false).map(tool => tool.name), ['read_file', 'list_files', 'search', 'edit_file', 'create_file', 'run_command'], 'no index, no codebase_search');
+	assert.deepEqual(AGENT_TOOLS.map(tool => tool.name), ['read_file', 'list_files', 'search', 'codebase_search', 'edit_file', 'create_file', 'run_command', 'update_plan']);
+	assert.deepEqual(agentTools(false).map(tool => tool.name), ['read_file', 'list_files', 'search', 'edit_file', 'create_file', 'run_command', 'update_plan'], 'no index, no codebase_search');
 	assert.equal(agentTools(true), AGENT_TOOLS);
 	assert.equal(describeToolCall('codebase_search', { query: 'date parsing', path: 'src' }), 'Searched the codebase for “date parsing” in src');
 	assert.equal(describeToolCall('read_file', { path: 'a.ts', start_line: 10, end_line: 20 }), 'Read a.ts lines 10-20');
@@ -190,4 +190,26 @@ test('a stopped agent turn followed by a new message merges into one user messag
 	const messages = buildMessages([turn('user', 'go'), turn('assistant', '', { transcript }), turn('user', 'try again')], 200_000, { includeTools: true });
 	assert.deepEqual(messages.map(message => message.role), ['user', 'assistant', 'user']);
 	assert.deepEqual((messages[2].content as { type: string }[]).map(part => part.type), ['tool_result', 'text']);
+});
+
+test('update_plan steps are cleaned up: known statuses, one active step, no empty steps', () => {
+	assert.deepEqual(parsePlan({
+		steps: [
+			{ text: 'Read package.json', status: 'done' },
+			{ text: '  Add   the script ', status: 'active' },
+			{ text: 'Wire into CI', status: 'active' },
+			{ text: '', status: 'pending' },
+			{ text: 'Run it', status: 'later' },
+			'Report back',
+		],
+	}), [
+		{ text: 'Read package.json', status: 'done' },
+		{ text: 'Add the script', status: 'active' },
+		{ text: 'Wire into CI', status: 'pending' },
+		{ text: 'Run it', status: 'pending' },
+		{ text: 'Report back', status: 'pending' },
+	]);
+	assert.equal(parsePlan({ steps: 'do it' }), undefined);
+	assert.equal(parsePlan({ steps: [] }), undefined);
+	assert.equal(parsePlan({ steps: Array.from({ length: 20 }, (_, i) => ({ text: `step ${i}`, status: 'pending' })) })!.length, 12);
 });

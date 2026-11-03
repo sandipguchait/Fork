@@ -103,9 +103,20 @@ interface IAnythingPickState extends IDisposable {
 }
 
 
+/**
+ * Meridian's omnibar mixes matching commands and an "Ask Companion" row into quick open's results
+ * (its All tab); its Files tab turns them off.
+ */
+export interface IAnythingExtraPicksProvider {
+	readonly enabled: boolean;
+	getExtraPicks(filter: string, token: CancellationToken): Promise<ReadonlyArray<IAnythingQuickPickItem | IQuickPickSeparator>>;
+}
+
 export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnythingQuickPickItem> {
 
 	static PREFIX = '';
+
+	static extraPicksProvider: IAnythingExtraPicksProvider | undefined;
 
 	private static readonly NO_RESULTS_PICK: IAnythingQuickPickItem = {
 		label: localize('noAnythingResults', "No matching results")
@@ -376,7 +387,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 		// search without prior filtering, you could not paste a file name
 		// including the `@` character to open it (e.g. /some/file@path)
 		// refs: https://github.com/microsoft/vscode/issues/93845
-		return this.doGetPicks(
+		return this.withExtraPicks(this.doGetPicks(
 			filter,
 			{
 				...runOptions,
@@ -384,7 +395,38 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			},
 			disposables,
 			token
-		);
+		), filter, runOptions, token);
+	}
+
+	/** Appends the omnibar's extra rows after the files (and after slow file search results). */
+	private withExtraPicks(
+		result: Picks<IAnythingQuickPickItem> | Promise<Picks<IAnythingQuickPickItem>> | FastAndSlowPicks<IAnythingQuickPickItem> | null,
+		filter: string,
+		runOptions: IAnythingQuickAccessProviderRunOptions | undefined,
+		token: CancellationToken,
+	): Picks<IAnythingQuickPickItem> | Promise<Picks<IAnythingQuickPickItem>> | FastAndSlowPicks<IAnythingQuickPickItem> | null {
+		const provider = AnythingQuickAccessProvider.extraPicksProvider;
+		if (!result || !provider?.enabled || runOptions?.handleAccept || runOptions?.fileSearchDelegate || filter.includes(GotoSymbolQuickAccessProvider.PREFIX)) {
+			return result;
+		}
+		const extras = provider.getExtraPicks(filter, token).catch(() => []);
+		const append = async (picks: Picks<IAnythingQuickPickItem>): Promise<Picks<IAnythingQuickPickItem>> => {
+			const extra = await extras;
+			if (!extra.length) {
+				return picks;
+			}
+			return Array.isArray(picks)
+				? [...picks, ...extra]
+				: { items: [...(picks as PicksWithActive<IAnythingQuickPickItem>).items, ...extra], active: (picks as PicksWithActive<IAnythingQuickPickItem>).active };
+		};
+		if (result instanceof Promise) {
+			return result.then(append);
+		}
+		const fastAndSlow = result as FastAndSlowPicks<IAnythingQuickPickItem>;
+		if (fastAndSlow.additionalPicks instanceof Promise) {
+			return { ...fastAndSlow, additionalPicks: fastAndSlow.additionalPicks.then(append) };
+		}
+		return append(result as Picks<IAnythingQuickPickItem>);
 	}
 
 	private _supportsLinks(runOptions?: IAnythingQuickAccessProviderRunOptions): boolean {

@@ -22,10 +22,10 @@
  */
 
 .monaco-workbench.floating-panels {
-	--modern-ui-floating-card-margin: var(--vscode-spacing-size40);
+	--modern-ui-floating-card-margin: var(--vscode-spacing-size80);
 	--modern-ui-floating-card-inner-margin: var(--vscode-spacing-sizeNone);
-	--modern-ui-floating-card-outer-margin: var(--vscode-spacing-size40);
-	--modern-ui-floating-card-statusbar-margin: var(--vscode-spacing-size40);
+	--modern-ui-floating-card-outer-margin: var(--vscode-spacing-size80);
+	--modern-ui-floating-card-statusbar-margin: var(--vscode-spacing-size80);
 }
 
 .monaco-workbench.floating-panels.modern-ui-compact {

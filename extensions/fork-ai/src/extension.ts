@@ -11,6 +11,7 @@ import { CodebaseIndexService } from './index/service.ts';
 import { chooseEmbeddingModel, createIndexStatusBar, showIndexMenu } from './index/statusBar.ts';
 import { manageModels } from './manageModels.ts';
 import { McpManager, PROJECT_CONFIG, USER_CONFIG } from './mcp/manager.ts';
+import { registerMeridian } from './meridian.ts';
 import { openMcpConfig, showMcpServers } from './mcp/panel.ts';
 import { ModelStore } from './modelStore.ts';
 
@@ -22,7 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	// The codebase index: kept in memory, embeddings cached in this workspace's storage.
 	const codebase = new CodebaseIndexService(context.storageUri, store);
 	// MCP servers from ~/.fork/mcp.json and .fork/mcp.json; their tools join Agent mode.
-	const mcpOutput = vscode.window.createOutputChannel('Fork AI: MCP');
+	const mcpOutput = vscode.window.createOutputChannel('Companion: MCP');
 	const mcp = new McpManager(context.workspaceState, mcpOutput);
 	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState, codebase, mcp);
 	const inlineEdit = new InlineEditController(store);
@@ -46,10 +47,13 @@ export function activate(context: vscode.ExtensionContext): void {
 		chat,
 		inlineEdit,
 		vscode.window.registerWebviewViewProvider(CHAT_VIEW_ID, chat, { webviewOptions: { retainContextWhenHidden: true } }),
+		// Meridian's title bar, omnibar and status bar.
+		registerMeridian(store, chat),
 
 		vscode.commands.registerCommand('forkAi.openChat', () => chat.reveal()),
 		vscode.commands.registerCommand('forkAi.newChat', () => chat.newChat()),
-		vscode.commands.registerCommand('forkAi.addModel', () => addModel(store)),
+		// Meridian's welcome passes { kind: 'key' } (Bring my own key) or { kind: 'local' } (Local model).
+		vscode.commands.registerCommand('forkAi.addModel', (args?: { kind?: 'key' | 'local' }) => addModel(store, 'chat', args?.kind === 'key' || args?.kind === 'local' ? args.kind : 'any')),
 		vscode.commands.registerCommand('forkAi.manageModels', () => store.list().length ? manageModels(store) : addModel(store)),
 		vscode.commands.registerCommand('forkAi.chooseEmbeddingModel', () => chooseEmbeddingModel(store)),
 		vscode.commands.registerCommand('forkAi.reindex', () => codebase.rebuild()),
@@ -67,7 +71,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			try {
 				await vscode.workspace.fs.stat(uri);
 			} catch {
-				await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('# Files Fork AI leaves out of the codebase index, in .gitignore syntax.\n# .gitignore is followed too.\n\n'));
+				await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('# Files the Companion leaves out of the codebase index, in .gitignore syntax.\n# .gitignore is followed too.\n\n'));
 			}
 			await vscode.window.showTextDocument(uri);
 		}),

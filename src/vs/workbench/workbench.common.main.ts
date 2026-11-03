@@ -348,6 +348,9 @@ import './contrib/relauncher/browser/relauncher.contribution.js';
 // Modern UI (experimental)
 import './contrib/modernUI/browser/modernUI.contribution.js';
 
+// Meridian
+import './contrib/meridian/browser/meridian.contribution.js';
+
 // Tasks
 import './contrib/tasks/browser/task.contribution.js';
 

@@ -121,7 +121,7 @@ interface IPendingStatusbarEntry {
 
 class StatusbarPart extends Part implements IStatusbarEntryContainer {
 
-	static readonly HEIGHT = 22;
+	static readonly HEIGHT = 32;
 
 	/**
 	 * Vertical padding reserved around the main status bar under the floating panels

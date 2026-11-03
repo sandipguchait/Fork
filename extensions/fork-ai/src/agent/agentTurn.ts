@@ -8,7 +8,7 @@ import { countChanges } from '../diff.ts';
 import type { AgentStepRecord, ChatTurn } from '../history.ts';
 import { runAgent } from './loop.ts';
 import { DEFAULT_CACHE_FOLDERS, describeSandbox, detectSandbox, writableFolders, type SandboxKind, type SandboxPolicy } from './sandbox.ts';
-import { AGENT_SYSTEM_PROMPT, agentTools, describeToolCall } from './tools.ts';
+import { AGENT_SYSTEM_PROMPT, agentTools, describeToolCall, parsePlan, PLAN_TOOL } from './tools.ts';
 import type { McpManager } from '../mcp/manager.ts';
 import { WorkspaceTools, type ApprovalDecision, type CodebaseSearch, type McpToolRunner } from './workspaceTools.ts';
 
@@ -127,7 +127,19 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<'done' | 
 		messages: options.messages,
 		tools: [...agentTools(Boolean(options.codebase)), ...mcpEntries.map(entry => entry.definition)],
 		signal: options.signal,
-		execute: (call, signal) => tools.execute(call, signal),
+		execute: (call, signal) => {
+			// The plan is shown in the chat, not run: it changes nothing in the project.
+			if (call.name === PLAN_TOOL) {
+				const plan = parsePlan(call.arguments);
+				if (!plan) {
+					return Promise.resolve({ content: 'The plan needs a steps array of { text, status } objects.', isError: true });
+				}
+				reply.plan = plan;
+				options.onUpdate();
+				return Promise.resolve({ content: 'The plan is shown to the user.', isError: false });
+			}
+			return tools.execute(call, signal);
+		},
 		events: {
 			onText: (step, text) => {
 				if (!textStep || textStepIndex !== step) {
@@ -140,6 +152,10 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<'done' | 
 				options.onUpdate();
 			},
 			onToolStart: call => {
+				if (call.name === PLAN_TOOL) {
+					textStep = undefined;
+					return; // Shown as the plan card, not as a step.
+				}
 				const entry = options.mcp?.resolve(call.name, mcpEntries);
 				const text = entry ? `Used ${options.mcp!.describe(entry)}` : describeToolCall(call.name, call.arguments);
 				const step: AgentStepRecord = { id: call.id || `${reply.id}_c${steps.length}`, kind: 'tool', text, status: 'running' };

@@ -9,6 +9,7 @@ import { MultiWindowParts, Part } from '../../part.js';
 import { ITitleService } from '../../../services/title/browser/titleService.js';
 import { getWCOTitlebarAreaRect, getZoomFactor, isWCOEnabled, onDidChangeFullscreen } from '../../../../base/browser/browser.js';
 import { MenuBarVisibility, getTitleBarStyle, getMenuBarVisibility, hasCustomTitlebar, hasNativeTitlebar, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, getWindowControlsStyle, WindowControlsStyle, TitlebarStyle, MenuSettings, hasNativeMenu, TitleBarSetting } from '../../../../platform/window/common/window.js';
+import { IProductService } from '../../../../platform/product/common/productService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
 import { IConfigurationService, IConfigurationChangeEvent } from '../../../../platform/configuration/common/configuration.js';
@@ -510,6 +511,32 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		this.windowTitle.registerVariables(variables);
 	}
 
+	/** The mark (a globe crossed by its equator and a meridian) and the product name, in the title bar. */
+	private createBrand(): void {
+		const brand = append(this.leftContent, $('div.meridian-brand'));
+		brand.setAttribute('aria-hidden', 'true');
+		const svgNs = 'http://www.w3.org/2000/svg';
+		const mark = document.createElementNS(svgNs, 'svg');
+		mark.setAttribute('viewBox', '0 0 24 24');
+		mark.setAttribute('fill', 'none');
+		mark.classList.add('meridian-brand-mark');
+		const circle = document.createElementNS(svgNs, 'circle');
+		circle.setAttribute('cx', '12');
+		circle.setAttribute('cy', '12');
+		circle.setAttribute('r', '9.5');
+		circle.classList.add('meridian-mark-primary');
+		const equator = document.createElementNS(svgNs, 'path');
+		equator.setAttribute('d', 'M2.5 12h19');
+		equator.classList.add('meridian-mark-secondary');
+		const meridian = document.createElementNS(svgNs, 'path');
+		meridian.setAttribute('d', 'M12 2.5c3.2 2.6 3.2 16.4 0 19');
+		meridian.classList.add('meridian-mark-primary');
+		mark.append(circle, equator, meridian);
+		brand.appendChild(mark);
+		const name = this.instantiationService.invokeFunction(accessor => accessor.get(IProductService)).nameShort;
+		append(brand, $('span.meridian-wordmark', undefined, name));
+	}
+
 	protected override createContentArea(parent: HTMLElement): HTMLElement {
 		this.element = parent;
 		this.rootContainer = append(parent, $('.titlebar-container'));
@@ -523,6 +550,11 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		// App Icon (Windows, Linux)
 		if ((isWindows || isLinux) && !hasNativeTitlebar(this.configurationService, this.titleBarStyle)) {
 			this.appIcon = prepend(this.leftContent, $('a.window-appicon'));
+		}
+
+		// Meridian's mark and wordmark
+		if (hasCustomTitlebar(this.configurationService, this.titleBarStyle)) {
+			this.createBrand();
 		}
 
 		// Draggable region that we can manipulate for #52522

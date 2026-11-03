@@ -29,6 +29,7 @@ import { asCssVariable, selectBorder } from '../../../../platform/theme/common/c
 import { ISelectOptionItem, SeparatorSelectOption } from '../../../../base/browser/ui/selectBox/selectBox.js';
 import { IActionViewItem } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { TerminalTabbedView } from './terminalTabbedView.js';
+import { ITerminalViewHeader, TerminalViewHeaders } from './terminalViewHeader.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { renderLabelWithIcons } from '../../../../base/browser/ui/iconLabel/iconLabels.js';
 import { getColorForSeverity } from './terminalStatusList.js';
@@ -56,6 +57,7 @@ import { hasKey } from '../../../../base/common/types.js';
 
 export class TerminalViewPane extends ViewPane {
 	private _parentDomElement: HTMLElement | undefined;
+	private _header: ITerminalViewHeader | undefined;
 	private _terminalTabbedView?: TerminalTabbedView;
 	get terminalTabbedView(): TerminalTabbedView | undefined { return this._terminalTabbedView; }
 	private _isInitialized: boolean = false;
@@ -197,6 +199,17 @@ export class TerminalViewPane extends ViewPane {
 		domStylesheetsJs.createStyleSheet(this._parentDomElement);
 		this._instantiationService.createInstance(TerminalThemeIconStyle, this._parentDomElement);
 
+		// Meridian: the row above the terminal (the Scripts chips), when one is set up.
+		if (!this._header && TerminalViewHeaders.factory) {
+			const header = this._header = this._register(TerminalViewHeaders.factory(this.instantiationService));
+			container.prepend(header.element);
+			this._register(header.onDidChangeHeight(() => {
+				if (this._parentDomElement) {
+					this.layoutBody(this._parentDomElement.offsetHeight, this._parentDomElement.offsetWidth);
+				}
+			}));
+		}
+
 		if (!this.shouldShowWelcome()) {
 			this._createTabsView();
 		}
@@ -244,7 +257,7 @@ export class TerminalViewPane extends ViewPane {
 	// eslint-disable-next-line @typescript-eslint/naming-convention
 	protected override layoutBody(height: number, width: number): void {
 		super.layoutBody(height, width);
-		this._terminalTabbedView?.layout(width, height);
+		this._terminalTabbedView?.layout(width, Math.max(0, height - (this._header?.height ?? 0)));
 	}
 
 	override createActionViewItem(action: Action, options: IBaseActionViewItemOptions): IActionViewItem | undefined {

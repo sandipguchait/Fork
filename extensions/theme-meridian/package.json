@@ -1,0 +1,40 @@
+{
+	"name": "theme-meridian",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"categories": [
+		"Themes"
+	],
+	"version": "1.0.0",
+	"publisher": "vscode",
+	"license": "MIT",
+	"engines": {
+		"vscode": "*"
+	},
+	"contributes": {
+		"themes": [
+			{
+				"id": "Meridian Nocturne",
+				"label": "%nocturneLabel%",
+				"uiTheme": "vs-dark",
+				"path": "./themes/meridian-nocturne.json"
+			},
+			{
+				"id": "Meridian Ember",
+				"label": "%emberLabel%",
+				"uiTheme": "vs-dark",
+				"path": "./themes/meridian-ember.json"
+			},
+			{
+				"id": "Meridian Porcelain",
+				"label": "%porcelainLabel%",
+				"uiTheme": "vs",
+				"path": "./themes/meridian-porcelain.json"
+			}
+		]
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/sandipguchait/Fork.git"
+	}
+}

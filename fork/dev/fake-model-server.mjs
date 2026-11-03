@@ -76,19 +76,24 @@ function fakeAgentStep(messages) {
 	const calls = list => ({ choices: [{ delta: { tool_calls: list.map(([name, args], index) => ({ index, id: `fake_${seen.length}_${index}`, type: 'function', function: { name, arguments: JSON.stringify(args) } })) }, finish_reason: 'tool_calls' }] });
 	const stop = { choices: [{ delta: {}, finish_reason: 'stop' }] };
 	const dates = seen.find(message => /\tconst \[year, month, day\]/.test(String(message.content)));
+	// The plan card: update_plan with each step's status, sent with the step's other tools.
+	const plan = active => ['update_plan', { steps: ['Find and read parseDate', 'Fix the month', 'Run the tests'].map((step, index) => ({ text: step, status: index < active ? 'done' : index === active ? 'active' : 'pending' })) }];
 	if (seen.length === 0) {
-		return [text('I\'ll look for `parseDate` and read the file first. '), calls([['search', { query: 'parseDate' }], ['read_file', { path: 'src/dates.ts' }]])];
+		return [text('I\'ll look for `parseDate` and read the file first. '), calls([plan(0), ['search', { query: 'parseDate' }], ['read_file', { path: 'src/dates.ts' }]])];
 	}
-	if (seen.length === 2) {
+	if (seen.length === 3) {
 		if (!dates || !/new Date\(year, month, day\)/.test(String(dates.content))) {
 			return [text('This is the fake test model; it only knows how to fix `parseDate` in the sample project, and that code looks different here. Nothing was changed.'), stop];
 		}
-		return [text('Months in JavaScript dates start at 0, so the month needs `- 1`. '), calls([['edit_file', { path: 'src/dates.ts', old_text: 'return new Date(year, month, day);', new_text: 'return new Date(year, month - 1, day);' }]])];
+		return [text('Months in JavaScript dates start at 0, so the month needs `- 1`. '), calls([plan(1), ['edit_file', { path: 'src/dates.ts', old_text: 'return new Date(year, month, day);', new_text: 'return new Date(year, month - 1, day);' }]])];
 	}
-	if (seen.length === 3) {
-		return [text('Now the tests. '), calls([['run_command', { command: 'node --test' }]])];
+	if (seen.length === 5) {
+		return [text('Now the tests. '), calls([plan(2), ['run_command', { command: 'node --test' }]])];
 	}
-	const passed = /Exit code: 0/.test(String(seen[seen.length - 1]?.content));
+	const passed = /Exit code: 0/.test(String(seen[6]?.content));
+	if (seen.length === 7 && passed) {
+		return [calls([plan(3)])];
+	}
 	return [text(passed
 		? 'Fixed `parseDate` in `src/dates.ts`: it now subtracts 1 from the month, and `node --test` passes.\n\nThis run came from **Fork\'s fake test model**. Use **Undo all** below to put the bug back and try again.'
 		: 'I changed `parseDate`, but the tests did not pass (or did not run). Check the output above; **Undo all** puts the file back.'), stop];

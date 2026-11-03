@@ -80,9 +80,10 @@ export const enum ModernUIDensity {
  * experiment (`LayoutSettings.MODERN_UI`) is enabled. Parts grow or shrink their
  * content by this amount to leave room for the margin/border applied in CSS
  * (`src/vs/workbench/browser/media/floatingPanels.css`, `.floating-panels`).
- * Keep in sync with the `--vscode-spacing-size40` (4px) token used there.
+ * Keep in sync with the `--vscode-spacing-size80` (8px) token used there:
+ * Meridian's 8px gutter between cards.
  */
-export const FLOATING_PANEL_MARGIN = 4;
+export const FLOATING_PANEL_MARGIN = 8;
 
 /**
  * Compact Modern UI density removes the gaps between cards.
@@ -96,7 +97,7 @@ export const COMPACT_FLOATING_PANEL_OUTER_MARGIN = 0;
 /**
  * The trailing card margin (in pixels) when the Modern UI Update experiment is
  * enabled. Together with the next card's leading {@link FLOATING_PANEL_MARGIN},
- * it forms the 4px inter-card gap. Keep in sync with the
+ * it forms the 8px inter-card gap. Keep in sync with the
  * `--vscode-spacing-sizeNone` (0px) token used in `floatingPanels.css`.
  */
 export const FLOATING_PANEL_INNER_MARGIN = 0;

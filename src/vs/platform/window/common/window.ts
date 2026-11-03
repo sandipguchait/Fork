@@ -383,7 +383,7 @@ export function getWindowControlsStyle(configurationService: IConfigurationServi
 	return WindowControlsStyle.NATIVE; // default to native on all OS
 }
 
-export const DEFAULT_CUSTOM_TITLEBAR_HEIGHT = 35; // includes space for command center
+export const DEFAULT_CUSTOM_TITLEBAR_HEIGHT = 52; // Meridian's title bar; includes space for the command center
 
 /** Centers macOS traffic lights vertically, optionally keeping their horizontal inset independent of height. */
 export function getMacOSWindowControlsPosition(height: number, osVersion: string, horizontalInset?: number): IPoint | null {

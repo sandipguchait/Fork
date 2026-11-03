@@ -155,6 +155,19 @@ export class SpaceHeader extends Disposable {
 		// The height depends on fonts, wrapping chips and the side bar's width: follow it.
 		const observer = new (getWindow(container).ResizeObserver)(() => this.onResize());
 		observer.observe(this.element);
+		// The view's own actions (new folder, refresh, collapse) sit at the right of the name row,
+		// outside this element: keep the name clear of them, however many the view shows.
+		const actions = Array.from(container.children).find(child => child.classList.contains('title-actions'));
+		if (actions) {
+			const reserve = () => {
+				const width = Math.ceil(actions.getBoundingClientRect().width);
+				names.style.paddingRight = width ? `${width + 14}px` : '';
+			};
+			const actionsObserver = new (getWindow(container).ResizeObserver)(reserve);
+			actionsObserver.observe(actions);
+			this._register({ dispose: () => actionsObserver.disconnect() });
+			reserve();
+		}
 		this._register({ dispose: () => observer.disconnect() });
 		this.renderName();
 		this.renderBadge();

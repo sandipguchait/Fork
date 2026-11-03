@@ -89,6 +89,16 @@ export async function getJson(fetchFn: FetchLike, url: URL, headers: Record<stri
 	}
 }
 
+/** POST JSON and parse a JSON reply (embeddings and other non-streaming calls). */
+export async function postJson(fetchFn: FetchLike, url: URL, headers: Record<string, string>, body: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
+	const response = await send(fetchFn, url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal });
+	try {
+		return await response.json() as Record<string, unknown>;
+	} catch {
+		throw new ModelRouterError('protocol', 'The endpoint did not answer with JSON.');
+	}
+}
+
 export function jsonPost(headers: Record<string, string>, body: unknown, signal: AbortSignal | undefined): RequestInit {
 	return {
 		method: 'POST',

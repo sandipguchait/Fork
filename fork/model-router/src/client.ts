@@ -5,9 +5,12 @@
 import { anthropicAdapter } from './adapters/anthropic.ts';
 import { geminiAdapter } from './adapters/gemini.ts';
 import { openAiAdapter } from './adapters/openai.ts';
-import { normalizeError } from './errors.ts';
+import { ModelRouterError, normalizeError } from './errors.ts';
 import { validateConfig } from './http.ts';
 import type { Adapter, ApiFormat, ChatRequest, ClientOptions, CompletionResult, FetchLike, ModelClient, ModelConfig, ModelInfo, StopReason, StreamEvent, ToolCallPart, Usage } from './types.ts';
+
+/** Inputs per embeddings request; providers cap batches (Gemini at 100). */
+export const EMBED_BATCH = 64;
 
 const ADAPTERS: Record<ApiFormat, Adapter> = {
 	openai: openAiAdapter,
@@ -50,6 +53,20 @@ export function createModelClient(config: ModelConfig, options: ClientOptions = 
 				}
 			}
 			return { text, toolCalls, stopReason, usage };
+		},
+		async embed(texts: readonly string[], signal?: AbortSignal): Promise<number[][]> {
+			if (!adapter.embed) {
+				throw new ModelRouterError('invalid_config', `The ${config.apiFormat} API has no embeddings endpoint. Use an OpenAI-compatible or Gemini embedding model.`);
+			}
+			const vectors: number[][] = [];
+			try {
+				for (let start = 0; start < texts.length; start += EMBED_BATCH) {
+					vectors.push(...await adapter.embed(config, texts.slice(start, start + EMBED_BATCH), fetchFn, signal));
+				}
+			} catch (error) {
+				throw normalizeError(error, signal);
+			}
+			return vectors;
 		},
 		async listModels(): Promise<ModelInfo[]> {
 			try {

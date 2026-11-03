@@ -5,7 +5,7 @@
 // Google Gemini API (generativelanguage.googleapis.com), native format.
 
 import { ModelRouterError, providerMessage } from '../errors.ts';
-import { basePath, getJson, joinPath, jsonPost, parseBaseUrl, sendStreaming } from '../http.ts';
+import { basePath, getJson, joinPath, jsonPost, parseBaseUrl, postJson, sendStreaming } from '../http.ts';
 import { parseJson, readSse } from '../sse.ts';
 import { partsOf, type Adapter, type ChatRequest, type FetchLike, type JsonSchema, type ModelConfig, type ModelInfo, type StopReason, type StreamEvent, type Usage } from '../types.ts';
 
@@ -25,6 +25,10 @@ export function streamUrl(base: URL, model: string): URL {
 		: versionedPath(base, `/models/${encodeURIComponent(bareModelName(model))}:streamGenerateContent`);
 	url.searchParams.set('alt', 'sse');
 	return url;
+}
+
+export function batchEmbedUrl(base: URL, model: string): URL {
+	return versionedPath(base, `/models/${encodeURIComponent(bareModelName(model))}:batchEmbedContents`);
 }
 
 export function modelsUrl(base: URL): URL {
@@ -177,4 +181,17 @@ async function listModels(config: ModelConfig, fetchFn: FetchLike): Promise<Mode
 		.map(entry => ({ id: bareModelName(entry.name as string), displayName: typeof entry.displayName === 'string' ? entry.displayName : undefined }));
 }
 
-export const geminiAdapter: Adapter = { stream, listModels };
+async function embed(config: ModelConfig, texts: readonly string[], fetchFn: FetchLike, signal?: AbortSignal): Promise<number[][]> {
+	const base = parseBaseUrl(config.baseUrl);
+	const model = `models/${bareModelName(config.model)}`;
+	const json = await postJson(fetchFn, batchEmbedUrl(base, config.model), headersFor(config), {
+		requests: texts.map(text => ({ model, content: { parts: [{ text }] } })),
+	}, signal);
+	const embeddings = json.embeddings as { values?: unknown }[] | undefined;
+	if (!Array.isArray(embeddings) || embeddings.length !== texts.length || embeddings.some(entry => !Array.isArray(entry.values))) {
+		throw new ModelRouterError('protocol', 'The embeddings reply did not contain one vector per input. Check that the model is an embedding model.');
+	}
+	return embeddings.map(entry => entry.values as number[]);
+}
+
+export const geminiAdapter: Adapter = { stream, listModels, embed };

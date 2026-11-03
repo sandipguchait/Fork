@@ -47,6 +47,13 @@ export interface TurnView {
 	/** Undo is possible while the checkpoint is still in memory. */
 	readonly canUndo?: boolean;
 	readonly undone?: boolean;
+	/** Agent turns: the plan, from the update_plan tool. */
+	readonly plan?: readonly PlanStepView[];
+}
+
+export interface PlanStepView {
+	readonly text: string;
+	readonly status: 'pending' | 'active' | 'done';
 }
 
 export type ChatMode = 'ask' | 'agent';
@@ -88,4 +95,5 @@ export type FromWebview =
 	| { readonly type: 'setMode'; readonly mode: ChatMode }
 	| { readonly type: 'approve'; readonly stepId: string; readonly decision: 'run' | 'always' | 'skip' }
 	| { readonly type: 'reviewChange'; readonly turnId: string; readonly path: string }
+	| { readonly type: 'reviewAll'; readonly turnId: string }
 	| { readonly type: 'undoChanges'; readonly turnId: string };

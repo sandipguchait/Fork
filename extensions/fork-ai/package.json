@@ -1,6 +1,6 @@
 {
 	"name": "fork-ai",
-	"displayName": "Fork AI",
+	"displayName": "Companion",
 	"description": "Chat, inline edits, an agent with MCP tools and a sandbox, and codebase search on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
 	"version": "0.5.0",
 	"publisher": "fork",
@@ -31,7 +31,7 @@
 			"secondarySidebar": [
 				{
 					"id": "forkAi",
-					"title": "Fork AI",
+					"title": "Companion",
 					"icon": "media/fork-ai.svg"
 				}
 			]
@@ -41,7 +41,7 @@
 				{
 					"type": "webview",
 					"id": "forkAi.chat",
-					"name": "Chat"
+					"name": "Companion"
 				}
 			]
 		},
@@ -49,123 +49,138 @@
 			{
 				"command": "forkAi.openChat",
 				"title": "Open Chat",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.newChat",
 				"title": "New Chat",
-				"category": "Fork AI",
+				"category": "Companion",
 				"icon": "$(add)"
 			},
 			{
 				"command": "forkAi.chatHistory",
 				"title": "Chat History",
-				"category": "Fork AI",
+				"category": "Companion",
 				"icon": "$(history)"
 			},
 			{
 				"command": "forkAi.addSelectionToChat",
 				"title": "Add Selection to Chat",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.addFileToChat",
 				"title": "Add File to Chat",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.addModel",
 				"title": "Add Model",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.manageModels",
 				"title": "Manage Models",
-				"category": "Fork AI",
+				"category": "Companion",
 				"icon": "$(gear)"
 			},
 			{
 				"command": "forkAi.inlineEdit",
-				"title": "Edit with AI",
-				"category": "Fork AI"
+				"title": "Edit with Companion",
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.acceptAllEdits",
-				"title": "Accept All AI Changes",
-				"category": "Fork AI",
+				"title": "Accept All Edits",
+				"category": "Companion",
 				"icon": "$(check-all)"
 			},
 			{
 				"command": "forkAi.rejectAllEdits",
-				"title": "Reject All AI Changes",
-				"category": "Fork AI",
+				"title": "Reject All Edits",
+				"category": "Companion",
 				"icon": "$(close-all)"
 			},
 			{
 				"command": "forkAi.acceptEdit",
-				"title": "Accept AI Change",
-				"category": "Fork AI"
+				"title": "Accept Edit",
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.rejectEdit",
-				"title": "Reject AI Change",
-				"category": "Fork AI"
+				"title": "Reject Edit",
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.cancelEdit",
-				"title": "Cancel AI Edit",
-				"category": "Fork AI"
+				"title": "Cancel Edit",
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.applyCode",
 				"title": "Apply Code from Chat",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.addCodebaseToChat",
 				"title": "Add Codebase to Chat",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.reindex",
 				"title": "Reindex Codebase",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.chooseEmbeddingModel",
 				"title": "Choose Embedding Model for Codebase Search",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.indexMenu",
 				"title": "Codebase Index",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.editForkignore",
 				"title": "Edit .forkignore",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.mcpServers",
 				"title": "MCP Servers",
-				"category": "Fork AI",
+				"category": "Companion",
 				"icon": "$(plug)"
 			},
 			{
 				"command": "forkAi.editUserMcp",
 				"title": "Edit User MCP Servers (~/.fork/mcp.json)",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.editProjectMcp",
 				"title": "Edit Project MCP Servers (.fork/mcp.json)",
-				"category": "Fork AI"
+				"category": "Companion"
 			},
 			{
 				"command": "forkAi.reloadMcp",
 				"title": "Reload MCP Servers",
-				"category": "Fork AI"
+				"category": "Companion"
+			},
+			{
+				"command": "forkAi.pickChatModel",
+				"title": "Switch Model",
+				"category": "Companion"
+			},
+			{
+				"command": "forkAi.shareChat",
+				"title": "Copy Chat as Markdown",
+				"category": "Companion"
+			},
+			{
+				"command": "forkAi.askCompanion",
+				"title": "Ask Companion",
+				"category": "Companion"
 			}
 		],
 		"menus": {
@@ -291,7 +306,7 @@
 			}
 		],
 		"configuration": {
-			"title": "Fork AI",
+			"title": "Companion",
 			"properties": {
 				"forkAi.chat.includeCurrentFile": {
 					"type": "boolean",

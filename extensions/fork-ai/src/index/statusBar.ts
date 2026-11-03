@@ -39,7 +39,7 @@ export function statusText(status: IndexStatus): { text: string; tooltip: string
 
 export function createIndexStatusBar(service: CodebaseIndexService): vscode.Disposable {
 	const item = vscode.window.createStatusBarItem('forkAi.index', vscode.StatusBarAlignment.Right, 100);
-	item.name = 'Fork AI Codebase Index';
+	item.name = 'Companion Codebase Index';
 	item.command = 'forkAi.indexMenu';
 	const update = () => {
 		const status = service.status();
@@ -103,7 +103,7 @@ export async function showIndexMenu(service: CodebaseIndexService, store: ModelS
 	}
 	items.push(
 		{ label: '$(exclude) Edit .forkignore', detail: 'Leave files out of the index, in .gitignore syntax. .gitignore is followed too.', run: () => vscode.commands.executeCommand('forkAi.editForkignore') },
-		{ label: '$(circle-slash) Turn off indexing', detail: 'For this workspace. Turn it back on in Settings: Fork AI › Index: Enabled.', run: () => vscode.workspace.getConfiguration('forkAi.index').update('enabled', false, vscode.ConfigurationTarget.Workspace) },
+		{ label: '$(circle-slash) Turn off indexing', detail: 'For this workspace. Turn it back on in Settings: Companion › Index: Enabled.', run: () => vscode.workspace.getConfiguration('forkAi.index').update('enabled', false, vscode.ConfigurationTarget.Workspace) },
 	);
 	const picked = await vscode.window.showQuickPick(items, { title: statusText(status).tooltip.split('\n')[0] });
 	await picked?.run();

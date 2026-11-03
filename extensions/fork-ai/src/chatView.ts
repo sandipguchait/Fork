@@ -14,6 +14,7 @@ import { modelDetail } from './manageModels.ts';
 import type { McpManager } from './mcp/manager.ts';
 import type { KeyValueStore, ModelStore } from './modelStore.ts';
 import type { ChatMode, ChatState, ContextChip, FromWebview, ToWebview } from './protocol.ts';
+import { chatMarkdown } from './share.ts';
 
 export const CHAT_VIEW_ID = 'forkAi.chat';
 const MAX_ATTACHED_FILE_BYTES = 512 * 1024;
@@ -59,6 +60,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 	private mode: ChatMode;
 	private readonly approvals = new Map<string, (decision: ApprovalDecision) => void>();
 	private readonly disposables: vscode.Disposable[] = [];
+	private readonly busyEmitter = new vscode.EventEmitter<boolean>();
+	/** Fires when a reply starts or ends; Meridian's status bar shows Ready or Working. */
+	readonly onDidChangeBusy = this.busyEmitter.event;
 
 	constructor(
 		private readonly extensionUri: vscode.Uri,
@@ -119,6 +123,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		clearTimeout(this.stateTimer);
 		clearTimeout(this.liveTimer);
 		vscode.Disposable.from(...this.disposables).dispose();
+		this.busyEmitter.dispose();
+	}
+
+	get busy(): boolean {
+		return Boolean(this.abort);
 	}
 
 	// --- Public actions (commands) --------------------------------------------------------
@@ -146,6 +155,39 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		await this.history.setCurrent(session.id);
 		this.postState();
 		await this.reveal();
+	}
+
+	/** The current chat as Markdown (Share), or undefined when it is empty. */
+	markdown(): string | undefined {
+		return chatMarkdown(this.session);
+	}
+
+	/**
+	 * A message from outside the chat (the omnibar's Ask tab): opens the Companion and sends it.
+	 * Without text, the Companion opens with the context set and waits for the message.
+	 */
+	async ask(options: { readonly text?: string; readonly withActiveFile?: boolean; readonly withCodebase?: boolean; readonly mode?: ChatMode }): Promise<void> {
+		if (options.mode && options.mode !== this.mode) {
+			this.mode = options.mode === 'agent' ? 'agent' : 'ask';
+			await this.workspaceState.update(MODE_KEY, this.mode);
+		}
+		if (options.withActiveFile) {
+			const editor = vscode.window.activeTextEditor ?? this.lastEditor;
+			if (editor) {
+				this.lastEditor = editor;
+			}
+			this.currentFileExcluded = false;
+		}
+		if (options.withCodebase) {
+			this.addCodebase();
+		}
+		await this.reveal();
+		const text = options.text?.trim();
+		if (text) {
+			await this.send(text);
+		} else {
+			this.postState();
+		}
 	}
 
 	addSelection(editor: vscode.TextEditor): void {
@@ -280,6 +322,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			case 'reviewChange':
 				await this.reviewChange(message.turnId, message.path);
 				break;
+			case 'reviewAll':
+				await this.reviewAll(message.turnId);
+				break;
 			case 'undoChanges':
 				await this.undoChanges(message.turnId);
 				break;
@@ -303,6 +348,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		}
 		const before = vscode.Uri.from({ scheme: CHECKPOINT_SCHEME, path: `/${path}`, query: turnId });
 		await vscode.commands.executeCommand('vscode.diff', before, current, `${path} (before ↔ after the agent)`);
+	}
+
+	/** Review changes: every file the turn changed, in one multi-file diff. */
+	private async reviewAll(turnId: string): Promise<void> {
+		const root = this.root();
+		const turn = this.session.turns.find(candidate => candidate.id === turnId);
+		const changes = turn?.changes ?? [];
+		if (!root || !turn || !changes.length) {
+			return;
+		}
+		if (changes.length === 1 || !turn.checkpoint) {
+			await this.reviewChange(turnId, changes[0].path);
+			return;
+		}
+		const resources = changes.map(change => {
+			const current = vscode.Uri.joinPath(root, ...change.path.split('/'));
+			const before = vscode.Uri.from({ scheme: CHECKPOINT_SCHEME, path: `/${change.path}`, query: turnId });
+			return [current, before, current] as const;
+		});
+		await vscode.commands.executeCommand('vscode.changes', `Companion: ${changes.length} changed files`, resources);
 	}
 
 	private async undoChanges(turnId: string): Promise<void> {
@@ -428,6 +493,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
 		const abort = new AbortController();
 		this.abort = abort;
+		this.busyEmitter.fire(true);
 		this.streamingTurnId = reply.id;
 		this.postState();
 
@@ -441,6 +507,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		this.postState();
 		if (abort.signal.aborted) {
 			this.abort = undefined;
+			this.busyEmitter.fire(false);
 			this.streamingTurnId = undefined;
 			await this.history.save(this.session);
 			this.postState();
@@ -471,6 +538,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			}
 		} finally {
 			this.abort = undefined;
+			this.busyEmitter.fire(false);
 			this.streamingTurnId = undefined;
 			this.session.updatedAt = Date.now();
 			await this.history.save(this.session);
@@ -524,6 +592,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				reply.changes = await summarizeChanges(root, reply.checkpoint);
 			}
 			this.abort = undefined;
+			this.busyEmitter.fire(false);
 			this.streamingTurnId = undefined;
 			this.session.updatedAt = Date.now();
 			await this.history.save(this.session);
@@ -565,6 +634,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				changes: turn.changes,
 				canUndo: Boolean(turn.checkpoint && turn.changes?.length) && !turn.undone,
 				undone: turn.undone,
+				plan: turn.plan,
 			})),
 			currentFile,
 			currentFileExcluded: this.currentFileExcluded,
@@ -634,7 +704,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; img-src ${webview.cspSource} data:; font-src ${webview.cspSource}; script-src 'nonce-${scriptNonce}';">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="${style}">
-	<title>Fork AI Chat</title>
+	<title>Companion</title>
 </head>
 <body>
 	<script type="module" nonce="${scriptNonce}" src="${script}"></script>

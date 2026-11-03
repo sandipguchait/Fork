@@ -28,8 +28,12 @@ function title(step: number, text: string): string {
 	return `${purposeTitle} (${step}/${STEPS}): ${text}`;
 }
 
-async function pickPreset(purpose: ModelPurpose): Promise<ProviderPreset | undefined> {
-	const presets = purpose === 'embedding' ? PROVIDER_PRESETS.filter(preset => preset.embeddingModel !== undefined) : PROVIDER_PRESETS;
+/** Which providers to offer: all of them, the ones that need a key, or the local ones. */
+export type ProviderKind = 'any' | 'key' | 'local';
+
+async function pickPreset(purpose: ModelPurpose, kind: ProviderKind = 'any'): Promise<ProviderPreset | undefined> {
+	const presets = (purpose === 'embedding' ? PROVIDER_PRESETS.filter(preset => preset.embeddingModel !== undefined) : PROVIDER_PRESETS)
+		.filter(preset => kind === 'any' || (kind === 'local') === (preset.needsKey === false));
 	const picked = await vscode.window.showQuickPick(
 		presets.map(preset => ({
 			label: preset.label,
@@ -201,9 +205,9 @@ async function runTest(config: ModelConfig): Promise<ConnectionReport> {
  * codebase search instead, tested by embedding a line of code, and makes it the embedding model.
  * Returns the new model's id, or undefined if cancelled.
  */
-export async function addModel(store: ModelStore, purpose: ModelPurpose = 'chat'): Promise<string | undefined> {
+export async function addModel(store: ModelStore, purpose: ModelPurpose = 'chat', kind: ProviderKind = 'any'): Promise<string | undefined> {
 	purposeTitle = purpose === 'embedding' ? 'Add embedding model' : 'Add model';
-	const preset = await pickPreset(purpose);
+	const preset = await pickPreset(purpose, kind);
 	if (!preset) {
 		return undefined;
 	}

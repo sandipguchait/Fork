@@ -2,7 +2,7 @@
  *  Fork AI. Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
-import type { ChangeView, ChatState, ContextChip, FromWebview, StepView, ToWebview, TurnView } from '../src/protocol.ts';
+import type { ChangeView, ChatState, ContextChip, FromWebview, PlanStepView, StepView, ToWebview, TurnView } from '../src/protocol.ts';
 import { parseMarkdown } from './markdown.ts';
 
 interface VsCodeApi {
@@ -26,6 +26,8 @@ const ICONS = {
 	error: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5M8 10.8v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
 	skip: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
 	pause: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5v7M10 4.5v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+	attach: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 4.5 5.6 9.4a1.4 1.4 0 0 0 2 2l5-5a2.8 2.8 0 0 0-4-4l-5 5a4.2 4.2 0 0 0 6 6l4.4-4.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+	chevron: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 	spin: '<svg viewBox="0 0 16 16" aria-hidden="true" class="spin"><path d="M8 2.5a5.5 5.5 0 1 1-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
 };
 
@@ -60,7 +62,7 @@ const composer = el('div', 'composer');
 const chips = el('div', 'chips');
 const input = el('textarea', 'input');
 input.rows = 1;
-input.placeholder = 'Ask about your code. Type @ to add a file or the codebase.';
+input.placeholder = 'Plan, build, or ask. Type @ to add context';
 input.setAttribute('aria-label', 'Message');
 const footer = el('div', 'composer-footer');
 const modeSelect = el('select', 'mode-select');
@@ -74,10 +76,20 @@ for (const [value, label, title] of [['ask', 'Ask', 'Answers questions about you
 const modelSelect = el('select', 'model-select');
 modelSelect.setAttribute('aria-label', 'Model');
 const sendButton = iconButton('send', ICONS.send, 'Send (Enter)', () => sendOrStop());
+const attachButton = iconButton('attach', ICONS.attach, 'Add files or the whole codebase to the context (@)', () => post({ type: 'attachFile' }));
+
+/** A native select drawn as a pill with a chevron: keyboard and screen readers get the real control. */
+function pill(select: HTMLSelectElement, className: string): HTMLElement {
+	const wrapper = el('span', `pill ${className}`);
+	const chevron = el('span', 'pill-chevron');
+	chevron.innerHTML = ICONS.chevron;
+	wrapper.append(select, chevron);
+	return wrapper;
+}
 const warning = el('div', 'agent-warning');
 warning.setAttribute('role', 'status');
 
-footer.append(modeSelect, modelSelect, el('span', 'spacer'), sendButton);
+footer.append(pill(modeSelect, 'mode-pill'), pill(modelSelect, 'model-pill'), el('span', 'spacer'), attachButton, sendButton);
 composer.append(chips, input, footer);
 root.append(messages, warning, composer);
 document.body.append(root);
@@ -181,7 +193,12 @@ function renderTurn(turn: TurnView): HTMLElement {
 	}
 
 	if (turn.modelName) {
-		node.append(el('div', 'turn-meta', turn.steps ? `${turn.modelName} · agent` : turn.modelName));
+		const meta = el('div', 'turn-meta');
+		meta.append(el('span', 'turn-author', 'Companion'), el('span', undefined, turn.steps ? `${turn.modelName} · agent` : turn.modelName));
+		node.append(meta);
+	}
+	if (turn.plan?.length) {
+		node.append(renderPlan(turn.plan, state?.streamingTurnId === turn.id));
 	}
 	if (turn.steps) {
 		node.append(renderSteps(turn));
@@ -290,18 +307,36 @@ function renderSteps(turn: TurnView): HTMLElement {
 	return list;
 }
 
-function renderChanges(turn: TurnView, changes: readonly ChangeView[]): HTMLElement {
-	const box = el('div', `changes${turn.undone ? ' undone' : ''}`);
-	const head = el('div', 'changes-head');
-	head.append(el('span', 'changes-title', turn.undone ? `Undid changes to ${changes.length} file${changes.length === 1 ? '' : 's'}` : `Changed ${changes.length} file${changes.length === 1 ? '' : 's'}`));
-	head.append(el('span', 'spacer'));
-	if (turn.canUndo) {
-		const undo = el('button', 'link-button', 'Undo all');
-		undo.type = 'button';
-		undo.title = 'Put every file back the way it was before this turn';
-		undo.addEventListener('click', () => post({ type: 'undoChanges', turnId: turn.id }));
-		head.append(undo);
+const PLAN_STATUS: Record<PlanStepView['status'], string> = { done: 'Done', active: 'In progress', pending: 'To do' };
+
+/** "PLAN · Step 2 of 3": the agent's checklist from update_plan. */
+function renderPlan(plan: readonly PlanStepView[], streaming: boolean): HTMLElement {
+	const card = el('div', 'card plan');
+	const done = plan.filter(step => step.status === 'done').length;
+	const activeIndex = plan.findIndex(step => step.status === 'active');
+	const current = activeIndex >= 0 ? activeIndex + 1 : Math.min(done + (streaming ? 1 : 0), plan.length);
+	const head = el('div', 'card-head');
+	head.append(el('span', 'card-label', 'Plan'), el('span', 'spacer'), el('span', 'card-note', done === plan.length ? 'Done' : `Step ${Math.max(current, 1)} of ${plan.length}`));
+	card.append(head);
+	const list = el('ol', 'plan-steps');
+	for (const step of plan) {
+		// A step the turn stopped on before finishing is shown as to do, not spinning forever.
+		const status = step.status === 'active' && !streaming ? 'pending' : step.status;
+		const item = el('li', `plan-step ${status}`);
+		const mark = el('span', 'plan-mark');
+		mark.innerHTML = status === 'done' ? ICONS.check : status === 'active' ? ICONS.spin : '';
+		item.append(mark, el('span', 'plan-text', step.text));
+		item.setAttribute('aria-label', `${step.text}: ${PLAN_STATUS[status]}`);
+		list.append(item);
 	}
+	card.append(list);
+	return card;
+}
+
+function renderChanges(turn: TurnView, changes: readonly ChangeView[]): HTMLElement {
+	const box = el('div', `card changes${turn.undone ? ' undone' : ''}`);
+	const head = el('div', 'card-head');
+	head.append(el('span', 'card-label', turn.undone ? 'Changes undone' : 'Changes'), el('span', 'spacer'), el('span', 'card-note', `${changes.length} file${changes.length === 1 ? '' : 's'}`));
 	box.append(head);
 	for (const change of changes) {
 		const row = el('button', 'change-row');
@@ -314,6 +349,22 @@ function renderChanges(turn: TurnView, changes: readonly ChangeView[]): HTMLElem
 		}
 		row.append(el('span', 'spacer'), el('span', 'change-added', `+${change.added}`), el('span', 'change-removed', `−${change.removed}`));
 		box.append(row);
+	}
+	if (!turn.undone) {
+		const actions = el('div', 'card-actions');
+		const review = el('button', 'review', 'Review changes');
+		review.type = 'button';
+		review.title = changes.length === 1 ? `Compare ${changes[0].path} before and after` : 'Every changed file before and after, in one view';
+		review.addEventListener('click', () => post({ type: 'reviewAll', turnId: turn.id }));
+		actions.append(review);
+		if (turn.canUndo) {
+			const undo = el('button', 'secondary', 'Undo all');
+			undo.type = 'button';
+			undo.title = 'Put every file back the way it was before this turn';
+			undo.addEventListener('click', () => post({ type: 'undoChanges', turnId: turn.id }));
+			actions.append(undo);
+		}
+		box.append(actions);
 	}
 	return box;
 }
@@ -381,9 +432,7 @@ function renderChips(current: ChatState): void {
 	for (const attachment of current.attachments) {
 		chips.append(chipNode(attachment, { onRemove: () => post({ type: 'removeAttachment', id: attachment.id }) }));
 	}
-	const add = iconButton('chip add-context', ICONS.plus, 'Add files or the whole codebase to the context (@)', () => post({ type: 'attachFile' }));
-	add.append(el('span', 'chip-label', 'Add context'));
-	chips.append(add);
+	chips.hidden = !chips.childElementCount;
 }
 
 function renderModels(current: ChatState): void {
@@ -428,7 +477,7 @@ function render(): void {
 	renderChips(state);
 	renderModels(state);
 	modeSelect.value = state.mode;
-	input.placeholder = state.mode === 'agent' ? 'Describe a task, e.g. fix the failing test in dates.ts' : 'Ask about your code. Type @ to add a file or the codebase.';
+	input.placeholder = state.mode === 'agent' ? 'Plan, build, or ask. Type @ to add context' : 'Ask about your code. Type @ to add context';
 	warning.textContent = state.agentWarning ?? '';
 	warning.hidden = !state.agentWarning;
 	sendButton.innerHTML = state.busy ? ICONS.stop : ICONS.send;

@@ -22,6 +22,8 @@ interface TrackedHunk {
 interface ReviewSession {
 	readonly document: vscode.TextDocument;
 	readonly modelName: string;
+	/** What the user asked for, shown on the edit's card. */
+	readonly instruction: string;
 	hunks: TrackedHunk[];
 }
 
@@ -41,6 +43,17 @@ export interface EditOptions {
 const isMac = process.platform === 'darwin';
 const ACCEPT_KEYS = isMac ? '⌘⏎' : 'Ctrl+Enter';
 const REJECT_KEYS = isMac ? '⌘⌫' : 'Ctrl+Backspace';
+
+const APPLY_INSTRUCTION = 'Apply this change, suggested in chat, to the selected code.';
+
+/** The instruction on one short line, for the edit's card. */
+export function editTitle(instruction: string): string {
+	if (instruction.startsWith(APPLY_INSTRUCTION)) {
+		return 'Apply code from chat';
+	}
+	const line = instruction.replace(/\s+/g, ' ').trim();
+	return line.length > 56 ? `${line.slice(0, 55).trimEnd()}…` : line;
+}
 
 /** Lines [start, start + count) as a range that also removes their line breaks. */
 export function linesRange(document: vscode.TextDocument, start: number, count: number): vscode.Range {
@@ -85,7 +98,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		backgroundColor: new vscode.ThemeColor('editor.rangeHighlightBackground'),
 	});
 	private readonly pendingLabel = vscode.window.createTextEditorDecorationType({
-		after: { contentText: '  Fork AI is editing… Esc to cancel', color: new vscode.ThemeColor('descriptionForeground'), fontStyle: 'italic' },
+		after: { contentText: '  Companion is editing… Esc to cancel', color: new vscode.ThemeColor('descriptionForeground'), fontStyle: 'italic' },
 	});
 
 	private readonly acceptAllItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
@@ -96,7 +109,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		this.acceptAllItem.command = 'forkAi.acceptAllEdits';
 		this.rejectAllItem.command = 'forkAi.rejectAllEdits';
 		this.rejectAllItem.text = '$(close) Reject all';
-		this.rejectAllItem.tooltip = `Reject all AI changes in this file (${REJECT_KEYS})`;
+		this.rejectAllItem.tooltip = `Reject all Companion changes in this file (${REJECT_KEYS})`;
 		this.disposables.push(
 			vscode.languages.registerCodeLensProvider({ scheme: '*' }, this),
 			vscode.workspace.onDidChangeTextDocument(event => this.onDocumentChanged(event)),
@@ -130,7 +143,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 			return;
 		}
 		if (this.sessions.has(key)) {
-			const choice = await vscode.window.showInformationMessage('Accept or reject the AI changes in this file first.', 'Accept All', 'Reject All');
+			const choice = await vscode.window.showInformationMessage('Accept or reject the Companion changes in this file first.', 'Accept All', 'Reject All');
 			if (choice === 'Accept All') {
 				await this.resolveAll(document, 'accept');
 			} else if (choice === 'Reject All') {
@@ -149,7 +162,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		const { startLine, endLine } = this.targetLines(editor, options.wholeFile === true);
 		const hasSelection = !editor.selection.isEmpty || options.wholeFile === true;
 		const instruction = options.instruction ?? await vscode.window.showInputBox({
-			title: `Edit with AI · ${config.displayName}`,
+			title: `Edit with Companion · ${config.displayName}`,
 			prompt: hasSelection ? 'Describe the change to the selected code.' : 'Describe the code to write, or the change to make on this line.',
 			placeHolder: 'e.g. add error handling, convert to async/await, write a function that parses dates',
 			ignoreFocusOut: true,
@@ -169,7 +182,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 			return;
 		}
 		const instruction = [
-			'Apply this change, suggested in chat, to the selected code.',
+			APPLY_INSTRUCTION,
 			'Return the complete selected code with the change applied. Keep every other line exactly as it is, and never abbreviate with comments like "rest of code unchanged".',
 			'',
 			'```',
@@ -219,13 +232,13 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		let reply: string;
 		try {
 			reply = await vscode.window.withProgress(
-				{ location: vscode.ProgressLocation.Window, title: `Fork AI: editing with ${config.displayName}` },
+				{ location: vscode.ProgressLocation.Window, title: `Companion: editing with ${config.displayName}` },
 				async () => (await createModelClient(config).complete({ system: EDIT_SYSTEM_PROMPT, messages, signal: abort.signal })).text,
 			);
 		} catch (error) {
 			if (!(error instanceof ModelRouterError && error.kind === 'aborted')) {
 				const message = error instanceof Error ? error.message : String(error);
-				void vscode.window.showErrorMessage(`Fork AI could not edit: ${message}`, 'Manage Models').then(choice => {
+				void vscode.window.showErrorMessage(`The Companion could not edit: ${message}`, 'Manage Models').then(choice => {
 					if (choice) {
 						void vscode.commands.executeCommand('forkAi.manageModels');
 					}
@@ -241,7 +254,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 			return;
 		}
 		if (endLine >= document.lineCount || lines(startLine, endLine).join('\n') !== original.join('\n')) {
-			void vscode.window.showWarningMessage('The code changed while Fork AI was working, so the edit was not applied. Try again.');
+			void vscode.window.showWarningMessage('The code changed while the Companion was working, so the edit was not applied. Try again.');
 			return;
 		}
 
@@ -249,7 +262,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		const updated = reindent(original, code === '' ? [] : code.split('\n'));
 		const layout = combine(original, updated);
 		if (!layout.hunks.length) {
-			void vscode.window.showInformationMessage('Fork AI suggested no changes.');
+			void vscode.window.showInformationMessage('The Companion suggested no changes.');
 			return;
 		}
 
@@ -257,13 +270,14 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		const edit = new vscode.WorkspaceEdit();
 		edit.replace(document.uri, new vscode.Range(startLine, 0, endLine, document.lineAt(endLine).text.length), layout.lines.join(eol));
 		if (!await this.applyEdit(edit)) {
-			void vscode.window.showWarningMessage('Fork AI could not write the edit to the file.');
+			void vscode.window.showWarningMessage('The Companion could not write the edit to the file.');
 			return;
 		}
 
 		this.sessions.set(key, {
 			document,
 			modelName: config.displayName,
+			instruction,
 			hunks: layout.hunks.map(hunk => ({ id: this.nextId++, start: startLine + hunk.offset, removed: hunk.removed, added: hunk.added })),
 		});
 		this.refresh();
@@ -390,12 +404,16 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		session.hunks.forEach((hunk, index) => {
 			const range = new vscode.Range(hunk.start, 0, hunk.start, 0);
 			const args = [document.uri, hunk.id];
-			lenses.push(new vscode.CodeLens(range, { title: '$(check) Accept', command: 'forkAi.acceptEdit', arguments: args, tooltip: 'Keep this change' }));
-			lenses.push(new vscode.CodeLens(range, { title: '$(close) Reject', command: 'forkAi.rejectEdit', arguments: args, tooltip: 'Undo this change' }));
-			if (index === 0 && session.hunks.length > 1) {
-				lenses.push(new vscode.CodeLens(range, { title: `Accept all (${ACCEPT_KEYS})`, command: 'forkAi.acceptAllEdits', arguments: [] }));
-				lenses.push(new vscode.CodeLens(range, { title: `Reject all (${REJECT_KEYS})`, command: 'forkAi.rejectAllEdits', arguments: [] }));
+			// Meridian's "Companion edit" card: what was asked, then Reject and Accept.
+			if (index === 0) {
+				lenses.push(new vscode.CodeLens(range, { title: `$(sparkle) Companion edit · ${editTitle(session.instruction)}`, command: '', tooltip: `${editTitle(session.instruction) === 'Apply code from chat' ? 'Code from the chat, applied here' : session.instruction.slice(0, 400)}\n\nEdited by ${session.modelName}` }));
 			}
+			if (index === 0 && session.hunks.length > 1) {
+				lenses.push(new vscode.CodeLens(range, { title: `Reject all ${REJECT_KEYS}`, command: 'forkAi.rejectAllEdits', arguments: [] }));
+				lenses.push(new vscode.CodeLens(range, { title: `Accept all ${ACCEPT_KEYS}`, command: 'forkAi.acceptAllEdits', arguments: [] }));
+			}
+			lenses.push(new vscode.CodeLens(range, { title: session.hunks.length > 1 ? '$(close) Reject' : `$(close) Reject ${REJECT_KEYS}`, command: 'forkAi.rejectEdit', arguments: args, tooltip: 'Undo this change' }));
+			lenses.push(new vscode.CodeLens(range, { title: session.hunks.length > 1 ? '$(check) Accept' : `$(check) Accept ${ACCEPT_KEYS}`, command: 'forkAi.acceptEdit', arguments: args, tooltip: 'Keep this change' }));
 		});
 		return lenses;
 	}
@@ -439,7 +457,7 @@ export class InlineEditController implements vscode.CodeLensProvider, vscode.Dis
 		if (session) {
 			const count = session.hunks.length;
 			this.acceptAllItem.text = `$(check) Accept ${count === 1 ? 'change' : `all ${count} changes`}`;
-			this.acceptAllItem.tooltip = `Keep the AI changes from ${session.modelName} (${ACCEPT_KEYS})`;
+			this.acceptAllItem.tooltip = `Keep the Companion changes from ${session.modelName} (${ACCEPT_KEYS})`;
 			this.acceptAllItem.show();
 			this.rejectAllItem.show();
 		} else {

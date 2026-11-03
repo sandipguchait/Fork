@@ -2,16 +2,47 @@
  *  Fork AI. Licensed under the MIT License.
  *--------------------------------------------------------------------------------------------*/
 
+/* Meridian's typefaces (SIL Open Font License, see fonts/OFL-*.txt). Webviews do not see the
+   workbench's fonts, so the chat brings its own. */
+@font-face {
+	font-family: 'Geist';
+	src: url('./fonts/Geist-Variable.woff2') format('woff2');
+	font-weight: 100 900;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Geist Mono';
+	src: url('./fonts/GeistMono-Variable.woff2') format('woff2');
+	font-weight: 100 900;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Instrument Serif';
+	src: url('./fonts/InstrumentSerif-Italic.woff2') format('woff2');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+
 :root {
-	--radius: 6px;
+	/* Meridian's colors when the workbench has them (any theme gets the fallbacks). */
+	--radius: 10px;
 	--gap: 8px;
-	--muted: var(--vscode-descriptionForeground);
-	--border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
-	--surface: var(--vscode-input-background);
+	--text: var(--vscode-meridian-text, var(--vscode-foreground));
+	--muted: var(--vscode-meridian-textMuted, var(--vscode-descriptionForeground));
+	--secondary-text: var(--vscode-meridian-textSecondary, var(--vscode-descriptionForeground));
+	--border: var(--vscode-meridian-line, var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35))));
+	--border-strong: var(--vscode-meridian-lineStrong, var(--border));
+	--surface: var(--vscode-meridian-panelRaised, var(--vscode-input-background));
+	--hover: var(--vscode-meridian-hover, var(--vscode-toolbar-hoverBackground));
 	--code-bg: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
-	--accent: var(--vscode-button-background);
-	--accent-fg: var(--vscode-button-foreground);
-	--chip-border: color-mix(in srgb, var(--vscode-foreground) 22%, transparent);
+	--accent: var(--vscode-meridian-accent, var(--vscode-button-background));
+	--accent-fg: var(--vscode-meridian-accentForeground, var(--vscode-button-foreground));
+	--accent-soft: var(--vscode-meridian-accentSoft, color-mix(in srgb, var(--accent) 16%, transparent));
+	--accent2: var(--vscode-meridian-accentSecondary, var(--vscode-testing-iconPassed, #388a34));
+	--chip-border: var(--border-strong);
 }
 
 * {
@@ -730,4 +761,436 @@ button:focus-visible,
 .changes.undone .change-added,
 .changes.undone .change-removed {
 	color: var(--muted);
+}
+
+/* --- Meridian ---------------------------------------------------------------------------- */
+
+body {
+	color: var(--text);
+	font-family: 'Geist', var(--vscode-font-family);
+	font-size: 13px;
+}
+
+code,
+pre,
+.tool-title,
+.change-row,
+.approval-command {
+	font-family: 'Geist Mono', var(--vscode-editor-font-family) !important;
+}
+
+.messages {
+	padding: 14px 14px 6px;
+}
+
+.turn {
+	margin-bottom: 18px;
+}
+
+/* You: a bubble on the right. */
+.turn.user {
+	margin-left: 28px;
+	padding: 10px 13px;
+	border: none;
+	border-radius: 14px 14px 4px 14px;
+	background: var(--accent-soft);
+}
+
+.turn-chips .chip.small {
+	color: var(--secondary-text);
+}
+
+.turn-meta {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	font-size: 11px;
+	margin-bottom: 6px;
+}
+
+.turn-author {
+	color: var(--text);
+	font-weight: 600;
+}
+
+/* Cards: the plan, the changes. */
+.card {
+	margin: 8px 0;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--surface);
+	overflow: hidden;
+}
+
+.card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 12px 6px;
+	font-weight: normal;
+	border: none;
+}
+
+.card-label {
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.card-note {
+	font-size: 11px;
+	color: var(--muted);
+}
+
+.plan-steps {
+	list-style: none;
+	margin: 0;
+	padding: 2px 12px 10px;
+}
+
+.plan-step {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 4px 0;
+	color: var(--secondary-text);
+}
+
+.plan-mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex: none;
+	border-radius: 50%;
+	border: 1.5px solid var(--border-strong);
+}
+
+.plan-mark svg {
+	width: 10px;
+	height: 10px;
+}
+
+.plan-step.done .plan-mark {
+	border-color: var(--accent2);
+	background: var(--accent2);
+	color: var(--vscode-meridian-canvas, var(--vscode-editor-background));
+}
+
+.plan-step.done .plan-text {
+	color: var(--muted);
+	text-decoration: line-through;
+	text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.plan-step.active {
+	color: var(--text);
+	font-weight: 500;
+}
+
+.plan-step.active .plan-mark {
+	border-color: var(--accent);
+	color: var(--accent);
+	border-width: 0;
+}
+
+.plan-step.active .plan-mark svg {
+	width: 16px;
+	height: 16px;
+}
+
+.changes {
+	margin-top: 10px;
+}
+
+.changes.undone .card-label {
+	color: var(--muted);
+}
+
+.change-row {
+	padding: 5px 12px;
+	font-size: 12px;
+	color: var(--text);
+}
+
+.change-row:hover {
+	background: var(--hover);
+}
+
+.change-added {
+	color: var(--accent2);
+}
+
+.change-removed {
+	color: var(--vscode-gitDecoration-deletedResourceForeground, #ff7b93);
+}
+
+.card-actions {
+	display: flex;
+	gap: 6px;
+	padding: 8px 12px 12px;
+}
+
+.card-actions .review {
+	flex: 1;
+	height: 30px;
+	border: none;
+	border-radius: 9px;
+	background: var(--accent);
+	color: var(--accent-fg);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.card-actions .review:hover {
+	filter: brightness(1.08);
+}
+
+.card-actions .secondary {
+	height: 30px;
+	padding: 0 12px;
+	border-radius: 9px;
+	background: transparent;
+	border: 1px solid var(--border-strong);
+	color: var(--secondary-text);
+}
+
+.card-actions .secondary:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+/* Agent steps. */
+.tool-step {
+	border-radius: 9px;
+	border-color: var(--border);
+	background: var(--surface);
+}
+
+.tool-step.status-done .tool-icon {
+	color: var(--accent2);
+}
+
+.tool-step.status-awaiting {
+	border-color: var(--accent);
+}
+
+.tool-step.status-awaiting .tool-icon {
+	color: var(--accent);
+}
+
+.tool-head:hover:not(:disabled) {
+	background: var(--hover);
+}
+
+.approval-actions .primary {
+	border-radius: 8px;
+}
+
+.secondary {
+	border-radius: 8px;
+}
+
+.codeblock {
+	border-radius: 10px;
+	border-color: var(--border);
+}
+
+.codeblock-head {
+	border-color: var(--border);
+}
+
+.codeblock-action.apply {
+	color: var(--accent);
+}
+
+.codeblock-action:hover {
+	background: var(--hover);
+}
+
+.primary {
+	background: var(--accent);
+	color: var(--accent-fg);
+	border-radius: 9px;
+	padding: 7px 16px;
+	font-weight: 600;
+}
+
+.primary:hover {
+	background: var(--accent);
+	filter: brightness(1.08);
+}
+
+.empty {
+	padding: 28px 10px;
+}
+
+.empty-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-style: italic;
+	font-weight: normal;
+	font-size: 22px;
+	letter-spacing: -0.01em;
+	margin-bottom: 10px;
+}
+
+/* The composer: chips, the message, then Agent ⌄ · model ⌄ · attach · send. */
+.composer {
+	margin: 6px 12px 12px;
+	padding: 8px 8px 8px;
+	border: 1px solid var(--border-strong);
+	border-radius: 16px;
+	background: var(--surface);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.composer:focus-within {
+	border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.chips[hidden] {
+	display: none;
+}
+
+.chip {
+	border-radius: 7px;
+	padding: 2px 8px;
+	background: var(--hover);
+	color: var(--secondary-text);
+	border-color: var(--border);
+}
+
+.input {
+	padding: 6px 6px 8px;
+	min-height: 40px;
+	color: var(--text);
+}
+
+.input::placeholder {
+	color: var(--muted);
+}
+
+.composer-footer {
+	gap: 4px;
+	padding: 0;
+}
+
+.pill {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	border-radius: 8px;
+	color: var(--secondary-text);
+}
+
+.pill:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.pill select {
+	appearance: none;
+	-webkit-appearance: none;
+	max-width: 100%;
+	height: 26px;
+	padding: 0 22px 0 8px;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+	outline: none;
+	text-overflow: ellipsis;
+}
+
+.pill.mode-pill select {
+	color: var(--text);
+	font-weight: 500;
+}
+
+.model-pill {
+	max-width: 55%;
+}
+
+.model-pill select {
+	max-width: 100%;
+}
+
+.pill-chevron {
+	position: absolute;
+	right: 5px;
+	display: inline-flex;
+	pointer-events: none;
+}
+
+.pill-chevron svg {
+	width: 12px;
+	height: 12px;
+}
+
+.pill select:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	border-radius: 8px;
+}
+
+.pill select option {
+	background: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+}
+
+.mode-select,
+.model-select {
+	border: none;
+	max-width: none;
+}
+
+.attach {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--secondary-text);
+	cursor: pointer;
+}
+
+.attach:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.attach svg {
+	width: 15px;
+	height: 15px;
+}
+
+.send {
+	width: 30px;
+	height: 30px;
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.send:hover:not(:disabled) {
+	background: var(--accent);
+	filter: brightness(1.08);
+}
+
+.send:disabled {
+	opacity: 0.35;
+}
+
+.agent-warning {
+	border-radius: 10px;
+	color: var(--text);
+	border-color: color-mix(in srgb, var(--vscode-meridian-warning, #b89500) 50%, transparent);
+	background: color-mix(in srgb, var(--vscode-meridian-warning, #b89500) 12%, transparent);
 }

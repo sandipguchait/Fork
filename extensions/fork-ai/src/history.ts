@@ -25,6 +25,8 @@ export interface ChatTurn {
 	changes?: { readonly path: string; readonly added: number; readonly removed: number; readonly created: boolean }[];
 	/** Agent turns: the user undid the changes. */
 	undone?: boolean;
+	/** Agent turns: the plan from the update_plan tool, shown as a checklist. */
+	plan?: { readonly text: string; readonly status: 'pending' | 'active' | 'done' }[];
 }
 
 export interface AgentStepRecord {

@@ -72,7 +72,7 @@ export async function showMcpServers(manager: McpManager, output: vscode.OutputC
 			state,
 		}));
 		if (!manager.enabled()) {
-			items.unshift({ label: '$(circle-slash) MCP is turned off', detail: 'Settings: Fork AI › MCP: Enabled', run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'forkAi.mcp.enabled') });
+			items.unshift({ label: '$(circle-slash) MCP is turned off', detail: 'Settings: Companion › MCP: Enabled', run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'forkAi.mcp.enabled') });
 		} else if (!servers.length) {
 			items.unshift({ label: 'No MCP servers yet', detail: 'Add one to ~/.fork/mcp.json (all projects) or .fork/mcp.json (this project). Cursor\'s mcp.json format works as it is.' });
 		}

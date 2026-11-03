@@ -278,7 +278,8 @@ class QuickInputItemDelegate implements IListVirtualDelegate<IQuickPickElement> 
 		if (element instanceof QuickPickSeparatorElement) {
 			return 30;
 		}
-		return element.saneDetail ? 44 : 22;
+		// Meridian's omnibar rows: 44px, 58px with a detail line.
+		return element.saneDetail ? 58 : 44;
 	}
 
 	getTemplateId(element: IQuickPickElement): string {

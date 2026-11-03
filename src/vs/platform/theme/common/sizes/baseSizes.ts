@@ -88,7 +88,7 @@ export const codiconFontSizeCompact = registerSize('codiconFontSize.compact',
 // ------ Corner Radii
 
 export const cornerRadiusMedium = registerSize('cornerRadius.medium',
-	sizeForAllThemes(6, 'px'),
+	sizeForAllThemes(9, 'px'),
 	nls.localize('cornerRadiusMedium', "Base corner radius for UI elements."));
 
 export const cornerRadiusXSmall = registerSize('cornerRadius.xSmall',
@@ -96,15 +96,15 @@ export const cornerRadiusXSmall = registerSize('cornerRadius.xSmall',
 	nls.localize('cornerRadiusXSmall', "Extra small corner radius for very compact UI elements."));
 
 export const cornerRadiusSmall = registerSize('cornerRadius.small',
-	sizeForAllThemes(4, 'px'),
+	sizeForAllThemes(6, 'px'),
 	nls.localize('cornerRadiusSmall', "Small corner radius for compact UI elements."));
 
 export const cornerRadiusLarge = registerSize('cornerRadius.large',
-	sizeForAllThemes(8, 'px'),
+	sizeForAllThemes(16, 'px'),
 	nls.localize('cornerRadiusLarge', "Large corner radius for prominent UI elements."));
 
 export const cornerRadiusXLarge = registerSize('cornerRadius.xLarge',
-	sizeForAllThemes(12, 'px'),
+	sizeForAllThemes(18, 'px'),
 	nls.localize('cornerRadiusXLarge', "Extra large corner radius for very prominent UI elements."));
 
 export const cornerRadiusCircle = registerSize('cornerRadius.circle',

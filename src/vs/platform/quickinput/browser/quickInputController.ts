@@ -66,7 +66,7 @@ type QuickInputOverlayLayoutCorrection = {
 };
 
 export class QuickInputController extends Disposable {
-	private static readonly MAX_WIDTH = 600; // Max total width of quick input widget
+	private static readonly MAX_WIDTH = 640; // Max total width of quick input widget (Meridian's omnibar)
 
 	private idPrefix: string;
 	private ui: QuickInputUI | undefined;

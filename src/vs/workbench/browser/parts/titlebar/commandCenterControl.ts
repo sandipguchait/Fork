@@ -170,8 +170,11 @@ class CommandCenterCenterViewItem extends BaseActionViewItem {
 								|| that._configurationService.getValue<boolean>('workbench.disableAICustomizations') === true;
 							const forcedHidden = aiFeaturesDisabled && aiCustomizationsDisabled;
 							const agentControlValue = that._configurationService.getValue(AGENT_STATUS_ENABLED_SETTING);
-							const isCompactMode = !forcedHidden && (agentControlValue === true || agentControlValue === undefined || agentControlValue === 'compact');
+							// Meridian always shows the search icon, the prompt and the shortcut, like an omnibar.
+							const isCompactMode = false;
+							void forcedHidden; void agentControlValue;
 							container.classList.toggle('compact-mode', isCompactMode);
+							container.classList.add('meridian-omnibar-button');
 
 							const action = this.action;
 
@@ -186,10 +189,19 @@ class CommandCenterCenterViewItem extends BaseActionViewItem {
 							const labelElement = document.createElement('span');
 							labelElement.classList.add('search-label');
 							labelElement.textContent = label;
+							const shortcut = document.createElement('span');
+							shortcut.classList.add('meridian-omnibar-shortcut');
+							const updateShortcut = () => {
+								const kb = that._keybindingService.lookupKeybinding('workbench.action.quickOpen')?.getLabel();
+								shortcut.textContent = kb ?? '';
+								shortcut.style.display = kb ? '' : 'none';
+							};
+							updateShortcut();
+							this._store.add(that._keybindingService.onDidUpdateKeybindings(updateShortcut));
 							if (isCompactMode) {
 								reset(container, labelElement);
 							} else {
-								reset(container, searchIcon, labelElement);
+								reset(container, searchIcon, labelElement, shortcut);
 							}
 
 							const hover = this._store.add(that._hoverService.setupManagedHover(that._hoverDelegate, container, this.getTooltip()));
@@ -215,14 +227,12 @@ class CommandCenterCenterViewItem extends BaseActionViewItem {
 
 						private _getLabel(): string {
 							const { prefix, suffix } = that._windowTitle.getTitleDecorations();
-							let label = that._windowTitle.workspaceName;
+							// Meridian shows a prompt here; the Space (workspace) name heads the side bar instead.
+							let label = localize('meridian.omnibarPrompt', "Search files, run commands, or ask Companion");
 							if (that._windowTitle.isCustomTitleFormat()) {
 								label = that._windowTitle.getWindowTitle();
-							} else if (that._editorGroupService.partOptions.showTabs === 'none') {
-								label = that._windowTitle.fileName ?? label;
-							}
-							if (!label) {
-								label = localize('label.dfl', "Search");
+							} else if (that._editorGroupService.partOptions.showTabs === 'none' && that._windowTitle.fileName) {
+								label = that._windowTitle.fileName;
 							}
 							if (prefix) {
 								label = localize('label1', "{0} {1}", prefix, label);

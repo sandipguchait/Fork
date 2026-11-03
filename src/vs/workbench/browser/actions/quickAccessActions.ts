@@ -169,7 +169,8 @@ registerAction2(class QuickAccessAction extends Action2 {
 		const openClassicQuickAccess = (): void => {
 			const quickInputService = accessor.get(IQuickInputService);
 			const providerOptions: AnythingQuickAccessProviderRunOptions = {
-				includeHelp: true,
+				// Meridian's omnibar opens on files, commands and Ask; its tabs replace the list of modes.
+				includeHelp: false,
 				from: 'commandCenter',
 			};
 			quickInputService.quickAccess.show(undefined, {

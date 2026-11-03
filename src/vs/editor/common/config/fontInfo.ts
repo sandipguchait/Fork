@@ -231,14 +231,23 @@ export const DEFAULT_LINUX_FONT_FAMILY = '\'Droid Sans Mono\', monospace';
 /**
  * @internal
  */
+/**
+ * Meridian bundles Geist Mono (see workbench/browser/media/meridian.css); the platform fonts follow
+ * as fallbacks.
+ * @internal
+ */
+export const MERIDIAN_EDITOR_FONT_FAMILY = '\'Geist Mono\', ';
+
+/**
+ * @internal
+ */
 export const EDITOR_FONT_DEFAULTS = {
-	fontFamily: (
+	fontFamily: MERIDIAN_EDITOR_FONT_FAMILY + (
 		platform.isMacintosh ? DEFAULT_MAC_FONT_FAMILY : (platform.isWindows ? DEFAULT_WINDOWS_FONT_FAMILY : DEFAULT_LINUX_FONT_FAMILY)
 	),
 	fontWeight: 'normal',
-	fontSize: (
-		platform.isMacintosh ? 12 : 14
-	),
-	lineHeight: 0,
+	fontSize: 13,
+	// Meridian's airier code: 13px type on 22px lines.
+	lineHeight: 1.7,
 	letterSpacing: 0,
 };

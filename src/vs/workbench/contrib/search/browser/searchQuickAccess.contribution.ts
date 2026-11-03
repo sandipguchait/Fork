@@ -4,11 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from '../../../../nls.js';
-import { AbstractGotoLineQuickAccessProvider } from '../../../../editor/contrib/quickAccess/browser/gotoLineQuickAccess.js';
 import { Extensions as QuickAccessExtensions, IQuickAccessRegistry } from '../../../../platform/quickinput/common/quickAccess.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { defaultQuickAccessContextKeyValue } from '../../../browser/quickaccess.js';
-import { GotoSymbolQuickAccessProvider } from '../../codeEditor/browser/quickaccess/gotoSymbolQuickAccess.js';
 import { AnythingQuickAccessProvider } from './anythingQuickAccess.js';
 import { SymbolsQuickAccessProvider } from './symbolsQuickAccess.js';
 import './searchActionsSymbol.js';
@@ -18,7 +16,8 @@ const quickAccessRegistry = Registry.as<IQuickAccessRegistry>(QuickAccessExtensi
 quickAccessRegistry.registerQuickAccessProvider({
 	ctor: AnythingQuickAccessProvider,
 	prefix: AnythingQuickAccessProvider.PREFIX,
-	placeholder: nls.localize('anythingQuickAccessPlaceholder', "Search files by name (append {0} to go to line or {1} to go to symbol), or paste a link", AbstractGotoLineQuickAccessProvider.GO_TO_LINE_PREFIX, GotoSymbolQuickAccessProvider.PREFIX),
+	// Meridian's omnibar: files, commands and the Companion from one box. The prefixes still work.
+	placeholder: nls.localize('meridianOmnibarPlaceholder', "Search or ask"),
 	contextKey: defaultQuickAccessContextKeyValue,
 	helpEntries: [{
 		description: nls.localize('anythingQuickAccess', "Go to File"),

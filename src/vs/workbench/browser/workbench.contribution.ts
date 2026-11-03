@@ -326,7 +326,8 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			'workbench.editor.showIcons': {
 				'type': 'boolean',
 				'description': localize('showIcons', "Controls whether opened editors should show with an icon or not. This requires a file icon theme to be enabled as well."),
-				'default': true
+				// Meridian's tabs are plain names, as in the design.
+				'default': false
 			},
 			'workbench.editor.enablePreview': {
 				'type': 'boolean',
@@ -802,7 +803,8 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			},
 			[LayoutSettings.LAYOUT_ACTIONS]: {
 				'type': 'boolean',
-				'default': true,
+				// Meridian's title bar keeps its right side for the model, Share and the account.
+				'default': false,
 				'markdownDescription': isWeb ?
 					localize('layoutControlEnabledWeb', "Controls whether the layout control in the title bar is shown.") :
 					localize({ key: 'layoutControlEnabled', comment: ['{0}, {1} is a placeholder for a setting identifier.'] }, "Controls whether the layout control is shown in the custom title bar. This setting only has an effect when {0} is not set to {1}.", '`#window.customTitleBarVisibility#`', '`never`'),
@@ -866,7 +868,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 					localize('modernUIEditorTabStyle.connected', "Connect the active tab to the editor surface with an outside border and curved shoulders."),
 					localize('modernUIEditorTabStyle.pill', "Show editor tabs as separate rounded pills."),
 				],
-				'default': ModernUIEditorTabStyle.Connected,
+				'default': ModernUIEditorTabStyle.Pill,
 				'tags': ['experimental'],
 				'markdownDescription': localize({ key: 'modernUIEditorTabStyle', comment: ['{0} is a placeholder for a setting identifier.'] }, "Controls the editor tab style when {0} is enabled, and the chat and side-panel tab style in the Agents window. High contrast themes retain explicit selection and focus borders.", '`#workbench.experimental.modernUI#`'),
 			},

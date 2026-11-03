@@ -110,7 +110,7 @@ const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainerExtensi
 	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [TERMINAL_VIEW_ID, { mergeViewWithContainerWhenSingleView: true }]),
 	storageId: TERMINAL_VIEW_ID,
 	hideIfEmpty: true,
-	order: 3,
+	order: -1, // Meridian: the console opens on the terminal, so its tab comes first.
 	windowEnablement: WindowEnablement.Both
 }, ViewContainerLocation.Panel, { doNotRegisterOpenCommand: true, isDefault: true });
 Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([{

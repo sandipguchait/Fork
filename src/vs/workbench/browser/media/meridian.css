@@ -1,0 +1,1038 @@
+/*---------------------------------------------------------------------------------------------
+ *  Meridian. Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * Meridian's look on top of the Modern UI floating cards: its typefaces, the title bar with the
+ * brand and the omnibar button, the dock, rounded rows and pills, the console's tabs, a quiet
+ * status bar, and the omnibar, menus and pop-ups. Colors come from the theme (the Meridian
+ * themes set `meridian.*` alongside the standard colors); sizes from the size tokens.
+ */
+
+/* ---- Typefaces (SIL Open Font License, see fonts/OFL-*.txt) ---- */
+
+@font-face {
+	font-family: 'Geist';
+	src: url('./fonts/Geist-Variable.woff2') format('woff2');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Geist Mono';
+	src: url('./fonts/GeistMono-Variable.woff2') format('woff2');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Instrument Serif';
+	src: url('./fonts/InstrumentSerif-Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Instrument Serif';
+	src: url('./fonts/InstrumentSerif-Italic.woff2') format('woff2');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+
+.monaco-workbench.mac,
+.monaco-workbench.windows,
+.monaco-workbench.linux {
+	font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, sans-serif;
+	font-feature-settings: 'ss01' off;
+	letter-spacing: 0;
+}
+
+.monaco-workbench {
+	--meridian-font-serif: 'Instrument Serif', Georgia, serif;
+	--meridian-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+	--meridian-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+	--meridian-overlay-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+	--meridian-radius-row: 9px;
+	--meridian-radius-control: 10px;
+	--meridian-radius-card: 16px;
+	--meridian-radius-overlay: 18px;
+}
+
+.monaco-workbench.vs {
+	--meridian-shadow: 0 18px 50px rgba(60, 40, 20, 0.18);
+	--meridian-overlay-shadow: 0 30px 80px rgba(60, 40, 20, 0.24);
+}
+
+/* ---- Title bar: brand, omnibar button ---- */
+
+.monaco-workbench .part.titlebar > .titlebar-container > .titlebar-left {
+	gap: 16px;
+}
+
+.monaco-workbench .part.titlebar .meridian-brand {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 4px 0 12px;
+	flex: none;
+	-webkit-app-region: drag;
+	pointer-events: none;
+}
+
+.monaco-workbench.mac:not(.fullscreen) .part.titlebar .meridian-brand {
+	/* Clear of the traffic lights. */
+	padding-left: 4px;
+}
+
+.monaco-workbench .part.titlebar .meridian-brand-mark {
+	width: 22px;
+	height: 22px;
+	flex: none;
+}
+
+.monaco-workbench .part.titlebar .meridian-brand-mark .meridian-mark-primary {
+	stroke: var(--vscode-meridian-accent);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.monaco-workbench .part.titlebar .meridian-brand-mark .meridian-mark-secondary {
+	stroke: var(--vscode-meridian-accentSecondary);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.monaco-workbench .part.titlebar .meridian-wordmark {
+	font-family: var(--meridian-font-serif);
+	font-style: italic;
+	font-size: 22px;
+	line-height: 1;
+	letter-spacing: 0.01em;
+	color: var(--vscode-meridian-text);
+	white-space: nowrap;
+}
+
+/* The brand shows the mark, so the logo-style app icon (Windows, Linux) steps aside; the menu
+ * icon it turns into with a compact menu bar stays. */
+.monaco-workbench .part.titlebar > .titlebar-container > .titlebar-left > .window-appicon:not(.codicon) {
+	display: none;
+}
+
+.monaco-workbench .part.titlebar .command-center {
+	/* Back and forward stay on their shortcuts; the omnibar button stands alone, as in the design. */
+	gap: 0;
+}
+
+.monaco-workbench .part.titlebar .command-center > .monaco-toolbar > .monaco-action-bar > .actions-container > .action-item:not(.command-center-center) {
+	display: none;
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center {
+	height: 36px;
+	width: min(560px, 38vw);
+	max-width: none;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-commandCenter-border);
+	background-color: var(--vscode-commandCenter-background);
+	color: var(--vscode-meridian-textMuted);
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center:hover {
+	background-color: var(--vscode-commandCenter-activeBackground);
+	border-color: var(--vscode-commandCenter-activeBorder);
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center .monaco-action-bar,
+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center .actions-container,
+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center .action-item.meridian-omnibar-button {
+	width: 100%;
+	height: 100%;
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.meridian-omnibar-button {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 8px 0 12px;
+	justify-content: flex-start;
+	cursor: pointer;
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.meridian-omnibar-button .search-icon {
+	font-size: 16px;
+	color: var(--vscode-meridian-textMuted);
+	flex: none;
+}
+
+.monaco-workbench .part.titlebar .command-center .action-item.meridian-omnibar-button .search-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: left;
+	font-size: 13px;
+	color: var(--vscode-meridian-textMuted);
+}
+
+.monaco-workbench .meridian-omnibar-shortcut,
+.monaco-workbench .meridian-kbd {
+	flex: none;
+	font-family: var(--meridian-font-mono);
+	font-size: 11.5px;
+	line-height: 16px;
+	padding: 2px 7px;
+	border-radius: 6px;
+	background-color: var(--vscode-meridian-panelRaised);
+	border: 1px solid var(--vscode-meridian-line);
+	color: var(--vscode-meridian-textSecondary);
+}
+
+/* The right side: the Companion's model, Share, and the account avatar. */
+.monaco-workbench .part.titlebar .titlebar-right .action-toolbar-container .monaco-action-bar .actions-container {
+	gap: 10px;
+	align-items: center;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-model-pill {
+	height: 32px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 10px 0 12px;
+	border-radius: var(--meridian-radius-control);
+	border: 1px solid var(--vscode-meridian-line);
+	color: var(--vscode-meridian-textSecondary);
+	font-size: 12.5px;
+	cursor: pointer;
+	max-width: 240px;
+	-webkit-app-region: no-drag;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-model-pill:hover {
+	background-color: var(--vscode-meridian-hover);
+}
+
+.monaco-workbench .part.titlebar .meridian-model-pill .meridian-model-dot {
+	width: 7px;
+	height: 7px;
+	flex: none;
+	border-radius: 50%;
+	background-color: var(--vscode-meridian-accentSecondary);
+}
+
+.monaco-workbench .part.titlebar .meridian-model-pill.no-model .meridian-model-dot {
+	background-color: var(--vscode-meridian-warning);
+}
+
+.monaco-workbench .part.titlebar .meridian-model-pill .meridian-model-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .part.titlebar .meridian-model-pill .codicon {
+	font-size: 14px;
+	flex: none;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-share-button {
+	height: 32px;
+	display: flex;
+	align-items: center;
+	padding: 0 14px;
+	border-radius: var(--meridian-radius-control);
+	background-color: var(--vscode-meridian-accent);
+	color: var(--vscode-meridian-accentForeground);
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-share-button:hover {
+	filter: brightness(1.08);
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar {
+	width: 32px;
+	height: 32px;
+	margin-right: 6px;
+	-webkit-app-region: no-drag;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar > .action-label {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background-color: var(--vscode-meridian-panelRaised);
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	box-sizing: border-box;
+}
+
+/* With initials (and no account picture), the initials stand in for the icon. */
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar.has-initials > .action-label.codicon::before {
+	content: none;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar .meridian-avatar-initials {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vscode-meridian-textSecondary);
+	pointer-events: none;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar:has(> .action-label.has-avatar) .meridian-avatar-initials {
+	display: none;
+}
+
+.monaco-workbench .part.titlebar .titlebar-right .action-item.meridian-avatar > .action-label.has-avatar::before {
+	content: none;
+}
+
+/* ---- Dock (activity bar) ---- */
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .action-item {
+	margin: 3px auto;
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
+}
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .action-item .action-label {
+	border-radius: 12px;
+	width: 40px;
+	height: 40px;
+	-webkit-mask-size: 20px;
+	mask-size: 20px;
+	font-size: 20px;
+}
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .action-item:not(.checked):hover .action-label {
+	background-color: var(--vscode-meridian-hover);
+}
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .action-item.checked .action-label {
+	background-color: var(--vscode-meridian-accentSoft);
+}
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .action-item .active-item-indicator {
+	display: none;
+}
+
+.monaco-workbench .part.activitybar > .content .monaco-action-bar .badge .badge-content {
+	top: 4px;
+	right: 3px;
+	min-width: 16px;
+	height: 16px;
+	line-height: 16px;
+	padding: 0 4px;
+	border-radius: 8px;
+	font-size: 10.5px;
+	font-weight: 600;
+}
+
+/* ---- Side bar: titles, rows ---- */
+
+.monaco-workbench.modern-ui .part.sidebar > .title > .title-label h2,
+.monaco-workbench.modern-ui .part.auxiliarybar > .title > .title-label h2,
+.monaco-workbench .part.sidebar > .title > .title-label h2,
+.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-meridian-textMuted);
+}
+
+.monaco-workbench .pane-composite-part .pane-header {
+	font-weight: 500;
+}
+
+.monaco-workbench.modern-ui .monaco-pane-view .pane > .pane-header > .title,
+.monaco-workbench .pane-composite-part .pane-header > .title {
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-meridian-textMuted);
+}
+
+/* Rows are inset and rounded, like the design's file tree. */
+.monaco-workbench .part.sidebar .monaco-list .monaco-list-row,
+.monaco-workbench .part.auxiliarybar .monaco-list .monaco-list-row,
+.monaco-workbench .part.panel .monaco-list .monaco-list-row {
+	left: 8px;
+	width: calc(100% - 16px) !important;
+	border-radius: var(--meridian-radius-row);
+}
+
+.monaco-workbench .part.sidebar .monaco-list:focus .monaco-list-row.focused.selected,
+.monaco-workbench .part.sidebar .monaco-list .monaco-list-row.selected {
+	outline: none !important;
+}
+
+.monaco-workbench .part.sidebar .monaco-list .monaco-list-row .monaco-icon-label::before {
+	opacity: 0.9;
+}
+
+/* ---- Editor: tabs, breadcrumbs ---- */
+
+.monaco-workbench .part.editor > .content .editor-group-container > .title .tabs-container > .tab {
+	font-size: 12.5px;
+}
+
+.monaco-workbench .part.editor > .content .editor-group-container > .title .tabs-container > .tab.active {
+	font-weight: 500;
+}
+
+.monaco-workbench .part.editor > .content .editor-group-container > .title .monaco-breadcrumbs {
+	padding-left: 10px;
+	font-size: 12.5px;
+}
+
+.monaco-workbench .part.editor > .content .editor-group-container > .title .monaco-breadcrumbs .monaco-breadcrumb-item:last-child {
+	color: var(--vscode-breadcrumb-focusForeground);
+}
+
+.monaco-workbench .part.editor > .content .editor-group-container > .title .monaco-breadcrumbs .monaco-breadcrumb-item:last-child .monaco-icon-label {
+	padding: 0 8px;
+	border-radius: 7px;
+	background-color: var(--vscode-meridian-hover);
+}
+
+/* The time scrub under the editor (contrib/meridian/browser/timeScrub.ts). */
+.monaco-workbench .part.editor .editor-group-container > .meridian-time-scrub {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 0 18px;
+	box-sizing: border-box;
+	border-top: 1px solid var(--vscode-meridian-line);
+	background-color: var(--vscode-meridian-panel);
+	font-size: 12px;
+	overflow: hidden;
+}
+
+.monaco-workbench .meridian-time-scrub-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--vscode-meridian-textMuted);
+	white-space: nowrap;
+	flex: none;
+}
+
+.monaco-workbench .meridian-time-scrub-label .codicon {
+	font-size: 15px;
+}
+
+.monaco-workbench .meridian-time-scrub-track {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	height: 20px;
+}
+
+.monaco-workbench .meridian-time-scrub-line {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 9px;
+	height: 2px;
+	border-radius: 1px;
+	background-color: var(--vscode-meridian-lineStrong);
+}
+
+.monaco-workbench .meridian-time-scrub-marks {
+	position: absolute;
+	inset: 0 18px 0 0;
+}
+
+.monaco-workbench .meridian-time-scrub-mark {
+	position: absolute;
+	top: 5px;
+	width: 10px;
+	height: 10px;
+	padding: 0;
+	margin-left: -5px;
+	border-radius: 50%;
+	border: 2px solid var(--vscode-meridian-panel);
+	background-color: var(--vscode-meridian-textMuted);
+	cursor: pointer;
+	box-sizing: content-box;
+}
+
+.monaco-workbench .meridian-time-scrub-mark:hover,
+.monaco-workbench .meridian-time-scrub-mark:focus-visible {
+	background-color: var(--vscode-meridian-accent);
+	transform: scale(1.25);
+	outline: none;
+}
+
+.monaco-workbench .meridian-time-scrub-now {
+	position: absolute;
+	top: 3px;
+	right: 0;
+	width: 14px;
+	height: 14px;
+	padding: 0;
+	border-radius: 50%;
+	border: 3px solid var(--vscode-meridian-panel);
+	background-color: var(--vscode-meridian-accent);
+	cursor: pointer;
+	box-sizing: content-box;
+}
+
+.monaco-workbench .meridian-time-scrub-empty {
+	position: absolute;
+	left: 0;
+	top: 0;
+	line-height: 20px;
+	padding-right: 10px;
+	background-color: var(--vscode-meridian-panel);
+	color: var(--vscode-meridian-textMuted);
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-time-scrub-empty.hidden {
+	display: none;
+}
+
+.monaco-workbench .meridian-time-scrub-now-label {
+	flex: none;
+	color: var(--vscode-meridian-accent);
+	font-weight: 500;
+}
+
+/* ---- Console (bottom panel) tabs as pills ---- */
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item {
+	padding: 0 1px;
+}
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item .action-label:not(.codicon) {
+	height: 28px;
+	line-height: 28px;
+	padding: 0 12px !important;
+	border-radius: 8px !important;
+	font-size: 12.5px;
+	text-transform: none !important;
+}
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.checked .action-label:not(.codicon) {
+	background: var(--vscode-meridian-panelRaised) !important;
+	color: var(--vscode-meridian-text) !important;
+	font-weight: 500;
+}
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item:not(.checked):hover .action-label:not(.codicon) {
+	background: var(--vscode-meridian-hover) !important;
+}
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item .active-item-indicator {
+	display: none;
+}
+
+.monaco-workbench .part.panel > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .badge .badge-content {
+	border-radius: 7px;
+	font-size: 11px;
+	padding: 0 6px;
+}
+
+/* ---- Status bar: quiet text on the canvas ---- */
+
+.monaco-workbench .part.statusbar {
+	font-size: 12px;
+}
+
+.monaco-workbench .part.statusbar > .items-container > .statusbar-item > .statusbar-item-label {
+	padding: 0 7px;
+	border-radius: 8px;
+}
+
+.monaco-workbench .part.statusbar > .left-items {
+	padding-left: 10px;
+}
+
+.monaco-workbench .part.statusbar > .right-items {
+	padding-right: 10px;
+}
+
+/* The Scripts row above the terminal (contrib/meridian/browser/scriptsBar.ts). */
+.monaco-workbench .pane-body.integrated-terminal > .meridian-scripts-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: 38px;
+	flex: none;
+	padding: 0 14px;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.monaco-workbench .pane-body.integrated-terminal > .meridian-scripts-bar ~ .monaco-split-view2 {
+	flex: 1;
+	min-height: 0;
+}
+
+.monaco-workbench .meridian-scripts-label {
+	flex: none;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-meridian-textMuted);
+}
+
+.monaco-workbench .meridian-scripts-chips {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.monaco-workbench .meridian-scripts-chips::-webkit-scrollbar {
+	display: none;
+}
+
+.monaco-workbench .meridian-script-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	height: 26px;
+	padding: 0 11px 0 9px;
+	border-radius: 13px;
+	border: 1px solid var(--vscode-meridian-line);
+	background-color: var(--vscode-meridian-panelRaised);
+	color: var(--vscode-meridian-text);
+	font-family: var(--monaco-monospace-font);
+	font-size: 11.5px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+/* ▶ in the secondary accent. */
+.monaco-workbench .meridian-script-play {
+	width: 0;
+	height: 0;
+	border-style: solid;
+	border-width: 4.5px 0 4.5px 7px;
+	border-color: transparent transparent transparent var(--vscode-meridian-accentSecondary);
+}
+
+.monaco-workbench .meridian-script-chip:hover {
+	background-color: var(--vscode-meridian-hover);
+	border-color: var(--vscode-meridian-lineStrong);
+}
+
+.monaco-workbench .meridian-script-chip:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+/* ---- Omnibar (quick input) ---- */
+
+.monaco-workbench .quick-input-widget {
+	border-radius: var(--meridian-radius-overlay) !important;
+	box-shadow: var(--meridian-overlay-shadow) !important;
+	border: 1px solid var(--vscode-meridian-lineStrong) !important;
+	overflow: hidden;
+	padding-bottom: 0 !important;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-header {
+	padding: 12px 14px 10px !important;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-box .monaco-inputbox {
+	border-radius: 12px !important;
+	min-height: 40px;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-box .monaco-inputbox .input {
+	font-size: 15px !important;
+	padding: 9px 12px !important;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .monaco-list-row {
+	left: 8px;
+	width: calc(100% - 16px) !important;
+	border-radius: 11px;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-entry {
+	padding: 0 10px;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-label {
+	font-size: 13.5px;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-entry .quick-input-list-separator {
+	color: var(--vscode-meridian-textMuted);
+	font-size: 12px;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-separator-border {
+	border-top-color: var(--vscode-meridian-line);
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-footer {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	padding: 10px 18px;
+	border-top: 1px solid var(--vscode-meridian-line);
+	background-color: var(--vscode-meridian-panel);
+	color: var(--vscode-meridian-textMuted);
+	font-size: 12px;
+	line-height: 18px;
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-footer kbd {
+	font-family: var(--meridian-font-mono);
+	font-size: 11px;
+	margin-right: 4px;
+	color: var(--vscode-meridian-textSecondary);
+}
+
+/* The omnibar's tabs and hints (see contrib/meridian/browser/omnibar.ts). */
+.monaco-workbench .quick-input-widget.meridian-omnibar {
+	top: 120px !important;
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-tabs {
+	display: flex;
+	gap: 6px;
+	padding: 8px 14px 10px;
+	border-bottom: 1px solid var(--vscode-meridian-line);
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-tab {
+	height: 28px;
+	border-radius: 9px;
+	border: 0;
+	padding: 0 12px;
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 500;
+	background: transparent;
+	color: var(--vscode-meridian-textSecondary);
+	cursor: pointer;
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-tab:hover {
+	background: var(--vscode-meridian-hover);
+	color: var(--vscode-meridian-text);
+}
+
+.monaco-workbench .quick-input-widget .meridian-omnibar-tab.checked {
+	background: var(--vscode-quickInputList-focusBackground);
+	color: var(--vscode-quickInputList-focusForeground);
+}
+
+.monaco-workbench .quick-input-widget.meridian-omnibar .quick-input-list {
+	padding: 6px 0 8px;
+}
+
+/* Rows are 44px (quickInputList.ts); the one-line content sits in the middle. */
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-entry {
+	height: 100%;
+	align-items: center;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-entry .quick-input-list-rows {
+	justify-content: center;
+}
+
+.monaco-workbench .quick-input-widget .quick-input-list .quick-input-list-entry .quick-input-list-separator {
+	align-self: center;
+}
+
+/* ---- Menus, hovers, notifications, dialogs ---- */
+
+.monaco-workbench .monaco-menu-container,
+.monaco-workbench .context-view .monaco-menu {
+	border-radius: 12px !important;
+	box-shadow: var(--meridian-shadow) !important;
+}
+
+.monaco-workbench .monaco-menu .monaco-action-bar.vertical {
+	padding: 6px 0;
+}
+
+.monaco-workbench .monaco-menu .monaco-action-bar.vertical .action-menu-item {
+	border-radius: 8px;
+	margin: 0 6px;
+	height: 30px;
+}
+
+.monaco-workbench .monaco-hover,
+.monaco-workbench .monaco-hover.workbench-hover {
+	border-radius: 12px;
+	box-shadow: var(--meridian-shadow);
+}
+
+.monaco-workbench .notifications-toasts .notification-toast-container > .notification-toast,
+.monaco-workbench > .notifications-center {
+	border-radius: 14px !important;
+	box-shadow: var(--meridian-shadow) !important;
+	overflow: hidden;
+}
+
+.monaco-workbench .monaco-dialog-box {
+	border-radius: var(--meridian-radius-overlay) !important;
+	box-shadow: var(--meridian-overlay-shadow) !important;
+}
+
+/* ---- Buttons, inputs, editor widgets ---- */
+
+.monaco-workbench .monaco-button {
+	border-radius: var(--meridian-radius-control);
+	font-weight: 500;
+}
+
+.monaco-workbench .monaco-text-button {
+	min-height: 30px;
+}
+
+.monaco-workbench .monaco-inputbox,
+.monaco-workbench .monaco-select-box {
+	border-radius: var(--meridian-radius-control);
+}
+
+.monaco-workbench .monaco-editor .find-widget,
+.monaco-workbench .monaco-editor .suggest-widget,
+.monaco-workbench .monaco-editor .parameter-hints-widget,
+.monaco-workbench .monaco-editor .rename-box {
+	border-radius: 12px;
+	box-shadow: var(--meridian-shadow);
+}
+
+.monaco-workbench .monaco-editor .codelens-decoration {
+	font-family: 'Geist', system-ui, sans-serif;
+}
+
+/* ---- Scrollbars: thin, rounded ---- */
+
+.monaco-workbench .monaco-scrollable-element > .scrollbar > .slider {
+	border-radius: 6px;
+}
+
+.monaco-workbench .monaco-scrollable-element > .scrollbar.vertical > .slider {
+	width: 6px !important;
+	left: 4px !important;
+}
+
+.monaco-workbench .monaco-scrollable-element > .scrollbar.horizontal > .slider {
+	height: 6px !important;
+	top: 4px !important;
+}
+
+/* ---- Side bar: the Space header ---- */
+
+/* The header has its own "+", so the explorer's New File button steps aside. */
+.monaco-workbench .part.sidebar > .title.meridian-space-title .title-actions .action-item:has(> .codicon-new-file) {
+	display: none;
+}
+
+.monaco-workbench .part.sidebar > .title .meridian-space {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 14px 14px 10px;
+	box-sizing: border-box;
+	width: 100%;
+}
+
+.monaco-workbench .part.sidebar > .title .meridian-space.hidden,
+.monaco-workbench .part.sidebar > .title .meridian-space .hidden {
+	display: none !important;
+}
+
+.monaco-workbench .part.sidebar > .title.meridian-space-title {
+	display: block;
+	position: relative;
+	padding: 0;
+}
+
+.monaco-workbench .part.sidebar > .title.meridian-space-title > .title-label {
+	display: none;
+}
+
+.monaco-workbench .part.sidebar > .title.meridian-space-title > .title-actions {
+	position: absolute;
+	top: 18px;
+	right: 50px;
+	height: 26px;
+}
+
+.monaco-workbench .part.sidebar > .title.meridian-space-title > .global-actions.has-no-actions {
+	display: none;
+}
+
+.monaco-workbench .meridian-space-name-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 38px;
+}
+
+.monaco-workbench .meridian-space-names {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.monaco-workbench .meridian-space-label {
+	font-size: 11px;
+	line-height: 14px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-meridian-textMuted);
+}
+
+.monaco-workbench .meridian-space-name {
+	font-size: 15px;
+	line-height: 20px;
+	font-weight: 600;
+	color: var(--vscode-meridian-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-space-new-file {
+	width: 30px;
+	height: 30px;
+	flex: none;
+	display: grid;
+	place-items: center;
+	border-radius: 9px;
+	border: 1px solid var(--vscode-meridian-line);
+	background: transparent;
+	color: var(--vscode-meridian-textSecondary);
+	cursor: pointer;
+	padding: 0;
+}
+
+.monaco-workbench .meridian-space-new-file:hover,
+.monaco-workbench .meridian-space-chip:hover {
+	background: var(--vscode-meridian-hover);
+}
+
+.monaco-workbench .meridian-space-tabs {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 11px;
+	background: var(--vscode-meridian-canvas);
+	border: 1px solid var(--vscode-meridian-line);
+	height: 34px;
+	box-sizing: border-box;
+}
+
+.monaco-workbench .meridian-space-tab {
+	flex: 1;
+	height: 26px;
+	border-radius: 8px;
+	border: 0;
+	background: transparent;
+	color: var(--vscode-meridian-textSecondary);
+	font: inherit;
+	font-size: 12.5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	cursor: pointer;
+	padding: 0 4px;
+}
+
+.monaco-workbench .meridian-space-tab:hover {
+	background: var(--vscode-meridian-hover);
+}
+
+.monaco-workbench .meridian-space-tab.checked {
+	background: var(--vscode-meridian-panelRaised);
+	color: var(--vscode-meridian-text);
+	font-weight: 500;
+	box-shadow: 0 1px 0 var(--vscode-meridian-lineStrong);
+}
+
+.monaco-workbench .meridian-space-badge {
+	font-size: 11px;
+	line-height: 16px;
+	padding: 0 6px;
+	border-radius: 7px;
+	background: var(--vscode-meridian-accentSoft);
+	color: var(--vscode-meridian-accent);
+	font-weight: 500;
+}
+
+.monaco-workbench .meridian-space-pinned-row {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.monaco-workbench .meridian-space-pinned {
+	display: flex;
+	gap: 6px;
+	overflow: hidden;
+	height: 26px;
+	flex-wrap: wrap;
+}
+
+.monaco-workbench .meridian-space-chip {
+	height: 26px;
+	border-radius: 13px;
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	background: transparent;
+	color: var(--vscode-meridian-textSecondary);
+	font: inherit;
+	font-size: 12px;
+	padding: 0 10px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	max-width: 180px;
+}
+
+.monaco-workbench .meridian-space-chip > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-space-chip .codicon {
+	font-size: 12px;
+	color: var(--vscode-meridian-accent);
+}
+
+.monaco-workbench .meridian-space button:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+/* ---- Unsaved: the warning dot after the name (contrib/meridian/browser/unsavedDecorations.ts) marks
+   an unsaved file, in the tree and on its tab, so the tab keeps its × instead of a second dot. ---- */
+.monaco-workbench .part.editor > .content .editor-group-container > .title .tabs-container > .tab.dirty:not(.sticky):not(.sticky-compact) > .tab-actions .action-label:not(:hover)::before {
+	content: var(--vscode-icon-close-content);
+	font-family: var(--vscode-icon-close-font-family);
+}

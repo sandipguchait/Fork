@@ -40,6 +40,14 @@ export const restoreWalkthroughsConfigurationKey = 'workbench.welcomePage.restor
 export type RestoreWalkthroughsConfigurationValue = { folder: string; category?: string; step?: string };
 
 const configurationKey = 'workbench.startupEditor';
+
+/**
+ * Meridian: a welcome page that replaces Getting Started as the startup editor. Set by
+ * contrib/meridian; Help > Welcome still opens Getting Started and its walkthroughs.
+ */
+export const StartupWelcomeOverride: { value: { readonly typeId: string; open(options: { index?: number; pinned: boolean; preserveFocus: boolean }): Promise<unknown> } | undefined } = {
+	value: undefined,
+};
 const oldConfigurationKey = 'workbench.welcome.enabled';
 const telemetryOptOutStorageKey = 'workbench.telemetryOptOutShown';
 
@@ -203,7 +211,8 @@ export class StartupPageRunnerContribution extends Disposable implements IWorkbe
 	}
 
 	private async openGettingStarted(showTelemetryNotice?: boolean) {
-		const startupEditorTypeID = gettingStartedInputTypeId;
+		const override = StartupWelcomeOverride.value;
+		const startupEditorTypeID = override?.typeId ?? gettingStartedInputTypeId;
 		const editor = this.editorService.activeEditor;
 
 		// Ensure that the welcome editor won't get opened more than once
@@ -211,7 +220,9 @@ export class StartupPageRunnerContribution extends Disposable implements IWorkbe
 			return;
 		}
 
-		if (startupEditorTypeID === gettingStartedInputTypeId) {
+		if (override) {
+			await override.open({ index: editor ? 0 : undefined, pinned: false, preserveFocus: this.shouldPreserveFocus() });
+		} else if (startupEditorTypeID === gettingStartedInputTypeId) {
 			this.editorService.openEditor({
 				resource: GettingStartedInput.RESOURCE,
 				options: {

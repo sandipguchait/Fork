@@ -1,0 +1,397 @@
+/*---------------------------------------------------------------------------------------------
+ *  Meridian. Licensed under the MIT License.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Meridian's Welcome (contrib/meridian/browser/welcome.ts). */
+
+.monaco-workbench .meridian-welcome {
+	box-sizing: border-box;
+	overflow: auto;
+	outline: none;
+	color: var(--vscode-meridian-text);
+	background-color: var(--vscode-editor-background);
+	font-size: 14px;
+	container-type: inline-size;
+}
+
+.monaco-workbench .meridian-welcome:focus {
+	outline: none !important;
+}
+
+.monaco-workbench .meridian-welcome * {
+	box-sizing: border-box;
+}
+
+.monaco-workbench .meridian-welcome button {
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+
+.monaco-workbench .meridian-welcome button:focus-visible {
+	outline: 2px solid var(--vscode-meridian-accent);
+	outline-offset: 2px;
+}
+
+.monaco-workbench .meridian-welcome-page {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) clamp(380px, 38cqw, 500px);
+	gap: clamp(32px, 4cqw, 48px);
+	align-items: center;
+	min-height: 100%;
+	max-width: 1360px;
+	margin: 0 auto;
+	padding: 40px clamp(40px, 6cqw, 96px) 56px clamp(40px, 7cqw, 120px);
+}
+
+.monaco-workbench .meridian-welcome.narrow .meridian-welcome-page {
+	grid-template-columns: minmax(0, 1fr);
+	align-items: start;
+	gap: 36px;
+	padding: 36px 40px 48px;
+	max-width: 720px;
+}
+
+.monaco-workbench .meridian-welcome.compact .meridian-welcome-page {
+	padding: 24px 18px 36px;
+}
+
+.monaco-workbench .meridian-welcome-main {
+	display: flex;
+	flex-direction: column;
+	gap: 40px;
+	min-width: 0;
+}
+
+.monaco-workbench .meridian-welcome-head {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.monaco-workbench .meridian-welcome-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.monaco-workbench .meridian-welcome-mark .accent {
+	stroke: var(--vscode-meridian-accent);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.monaco-workbench .meridian-welcome-mark .accent2 {
+	stroke: var(--vscode-meridian-accentSecondary);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.monaco-workbench .meridian-welcome-wordmark {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-style: italic;
+	font-size: 26px;
+}
+
+.monaco-workbench .meridian-welcome-title {
+	margin: 0;
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: clamp(42px, 5.3cqw, 76px);
+	line-height: 1.02;
+	letter-spacing: -0.01em;
+	text-wrap: balance;
+	color: var(--vscode-meridian-text);
+}
+
+.monaco-workbench .meridian-welcome-where {
+	font-style: italic;
+	color: var(--vscode-meridian-textSecondary);
+}
+
+.monaco-workbench .meridian-welcome-actions {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.monaco-workbench .meridian-welcome.compact .meridian-welcome-actions {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.monaco-workbench .meridian-welcome-action {
+	height: 104px;
+	border-radius: 18px;
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	background-color: var(--vscode-meridian-panel);
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-start;
+	text-align: left;
+}
+
+.monaco-workbench .meridian-welcome-action:hover,
+.monaco-workbench .meridian-welcome-space:hover,
+.monaco-workbench .meridian-welcome-import:hover,
+.monaco-workbench .meridian-welcome-choice-button:hover:not(:disabled) {
+	background-color: var(--vscode-meridian-hover);
+}
+
+.monaco-workbench .meridian-welcome-action .codicon {
+	font-size: 22px;
+	color: var(--vscode-meridian-accent);
+}
+
+.monaco-workbench .meridian-welcome-action-row {
+	display: flex;
+	flex-wrap: wrap;
+	width: 100%;
+	gap: 2px 8px;
+	justify-content: space-between;
+	align-items: baseline;
+}
+
+.monaco-workbench .meridian-welcome-action-label {
+	font-size: 15px;
+	font-weight: 500;
+	line-height: 1.25;
+}
+
+.monaco-workbench .meridian-welcome-key {
+	font-family: 'Geist Mono', var(--monaco-monospace-font);
+	font-size: 12px;
+	color: var(--vscode-meridian-textMuted);
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-welcome-label {
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-meridian-textMuted);
+}
+
+.monaco-workbench .meridian-welcome-recent {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.monaco-workbench .meridian-welcome-recent:empty {
+	display: none;
+}
+
+.monaco-workbench .meridian-welcome-space {
+	height: 64px;
+	border-radius: 16px;
+	border: 1px solid var(--vscode-meridian-line);
+	background-color: var(--vscode-meridian-panel);
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 0 18px;
+	text-align: left;
+}
+
+.monaco-workbench .meridian-welcome-space-initial {
+	width: 36px;
+	height: 36px;
+	flex: none;
+	border-radius: 11px;
+	background-color: var(--vscode-meridian-accentSoft);
+	color: var(--vscode-meridian-accent);
+	display: grid;
+	place-items: center;
+	font-weight: 600;
+}
+
+.monaco-workbench .meridian-welcome-space-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.monaco-workbench .meridian-welcome-space-name {
+	font-size: 15px;
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-welcome-space-path,
+.monaco-workbench .meridian-welcome-space-open {
+	font-size: 12.5px;
+	color: var(--vscode-meridian-textMuted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-welcome-space-open {
+	flex: none;
+}
+
+/* "Make it yours" */
+.monaco-workbench .meridian-welcome-choices {
+	border-radius: 24px;
+	background-color: var(--vscode-meridian-panel);
+	border: 1px solid var(--vscode-meridian-line);
+	padding: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+	min-width: 0;
+}
+
+.monaco-workbench .meridian-welcome.compact .meridian-welcome-choices {
+	padding: 20px;
+}
+
+.monaco-workbench .meridian-welcome-choices-head {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.monaco-workbench .meridian-welcome-choices-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: 32px;
+	line-height: 1.1;
+}
+
+.monaco-workbench .meridian-welcome-choice {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.monaco-workbench .meridian-welcome-choice-title {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.monaco-workbench .meridian-welcome-themes {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.monaco-workbench .meridian-welcome-theme {
+	border-radius: 14px;
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	background-color: var(--vscode-meridian-panelRaised);
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	text-align: left;
+}
+
+.monaco-workbench .meridian-welcome-theme.checked {
+	border: 1.5px solid var(--vscode-meridian-accent);
+	box-shadow: 0 0 0 3px var(--vscode-meridian-accentSoft);
+}
+
+.monaco-workbench .meridian-welcome-swatch {
+	height: 64px;
+	border-radius: 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 9px;
+	box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.18);
+}
+
+.monaco-workbench .meridian-welcome-swatch > span {
+	height: 6px;
+	border-radius: 3px;
+}
+
+.monaco-workbench .meridian-welcome-theme-name {
+	font-size: 12.5px;
+	padding: 0 2px 2px;
+}
+
+.monaco-workbench .meridian-welcome-buttons {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+.monaco-workbench .meridian-welcome-choice-button {
+	height: 36px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	background-color: transparent;
+	padding: 0 14px;
+	font-size: 13px;
+	color: var(--vscode-meridian-textSecondary) !important;
+}
+
+.monaco-workbench .meridian-welcome-choice-button.primary {
+	border-color: var(--vscode-meridian-accent);
+	background-color: var(--vscode-meridian-accentSoft);
+	color: var(--vscode-meridian-text) !important;
+}
+
+.monaco-workbench .meridian-welcome-choice-button:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.monaco-workbench .meridian-welcome-connected {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 14px;
+	border-radius: 12px;
+	background-color: var(--vscode-meridian-accentSoft);
+	font-size: 13px;
+	max-width: 100%;
+}
+
+.monaco-workbench .meridian-welcome-connected .codicon {
+	color: var(--vscode-meridian-accentSecondary);
+}
+
+.monaco-workbench .meridian-welcome-connected > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.monaco-workbench .meridian-welcome-import {
+	min-height: 44px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-meridian-lineStrong);
+	background-color: transparent;
+	padding: 10px 14px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 13px;
+	text-align: left;
+	color: var(--vscode-meridian-textSecondary) !important;
+}
+
+.monaco-workbench .meridian-welcome-start {
+	height: 46px;
+	border-radius: 14px;
+	border: 0;
+	background-color: var(--vscode-meridian-accent);
+	color: var(--vscode-meridian-accentForeground) !important;
+	font-size: 14.5px;
+	font-weight: 600;
+}
+
+.monaco-workbench .meridian-welcome-start:hover {
+	filter: brightness(1.08);
+}

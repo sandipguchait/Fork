@@ -36,6 +36,7 @@ import { localize2 } from '../../../../nls.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { VisibleViewContainersTracker } from '../visibleViewContainersTracker.js';
 import { Extensions } from '../../panecomposite.js';
+import { SpaceHeader } from './spaceHeader.js';
 
 const PRIMARY_SIDE_BAR_SASH_CLASS = 'primary-sidebar-sash';
 
@@ -69,6 +70,11 @@ export class SidebarPart extends AbstractPaneCompositePart {
 	}
 
 	private readonly activityBarPart = this._register(this.instantiationService.createInstance(ActivitybarPart, this.location, this));
+
+	/** Meridian's Space header: the title area grows to this height while it shows. */
+	private static spaceTitleHeight: number | undefined;
+	private spaceHeader: SpaceHeader | undefined;
+	private spaceTitleArea: HTMLElement | undefined;
 	private readonly visibleViewContainersTracker: VisibleViewContainersTracker;
 	private readonly primarySideBarSashClassDisposable = this._register(new MutableDisposable());
 
@@ -91,7 +97,7 @@ export class SidebarPart extends AbstractPaneCompositePart {
 	) {
 		super(
 			Parts.SIDEBAR_PART,
-			{ hasTitle: true, trailingSeparator: false, borderWidth: () => (this.getColor(SIDE_BAR_BORDER) || this.getColor(contrastBorder)) ? 1 : 0 },
+			{ hasTitle: true, trailingSeparator: false, borderWidth: () => (this.getColor(SIDE_BAR_BORDER) || this.getColor(contrastBorder)) ? 1 : 0, titleHeight: () => SidebarPart.spaceTitleHeight },
 			SidebarPart.activeViewletSettingsKey,
 			ActiveViewletContext.bindTo(contextKeyService),
 			SidebarFocusContext.bindTo(contextKeyService),
@@ -132,6 +138,39 @@ export class SidebarPart extends AbstractPaneCompositePart {
 		}));
 
 		this.registerActions();
+	}
+
+	protected override createTitleArea(parent: HTMLElement): HTMLElement | undefined {
+		const titleArea = super.createTitleArea(parent);
+		if (titleArea) {
+			this.spaceTitleArea = titleArea;
+			this.spaceHeader = this._register(this.instantiationService.createInstance(SpaceHeader, titleArea, {
+				activeViewContainerId: () => this.getActivePaneComposite()?.getId(),
+				openViewContainer: async id => { await this.openPaneComposite(id, true); },
+			}));
+			this._register(this.spaceHeader.onDidChangeHeight(() => this.updateSpaceHeader()));
+			this._register(this.onDidPaneCompositeOpen(() => this.updateSpaceHeader()));
+			this._register(this.onDidPaneCompositeClose(() => this.updateSpaceHeader()));
+			this.updateSpaceHeader();
+		}
+		return titleArea;
+	}
+
+	/** Shows the Space header above Files and Changes, and sizes the title area to fit it. */
+	private updateSpaceHeader(): void {
+		if (!this.spaceHeader || !this.spaceTitleArea) {
+			return;
+		}
+		const show = this.spaceHeader.isShownFor(this.getActivePaneComposite()?.getId());
+		this.spaceHeader.setVisible(show);
+		this.spaceTitleArea.classList.toggle('meridian-space-title', show);
+		const height = show ? this.spaceHeader.height : undefined;
+		// The title row's CSS height is fixed for the usual one-line title; the header needs its own.
+		this.spaceTitleArea.style.height = height !== undefined ? `${height}px` : '';
+		if (height !== SidebarPart.spaceTitleHeight) {
+			SidebarPart.spaceTitleHeight = height;
+			this.relayout();
+		}
 	}
 
 	private onDidChangeAutoHideViewContainers(e: { before: number; after: number }): void {

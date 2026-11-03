@@ -926,3 +926,24 @@ export const WINDOW_INACTIVE_BORDER = registerColor('window.inactiveBorder', {
 	hcDark: contrastBorder,
 	hcLight: contrastBorder
 }, localize('windowInactiveBorder', "The color used for the border of the window when it is inactive on macOS or Linux. Requires custom title bar style and custom or hidden window controls on Linux."));
+
+// < --- Meridian --- >
+
+// The design's palette roles. The Meridian themes set them; other themes get values derived from
+// their own colors, so Meridian's controls (the brand mark, the omnibar button, the Companion panel,
+// the welcome page) stay legible under any theme. Webviews read them as --vscode-meridian-*.
+
+export const MERIDIAN_ACCENT = registerColor('meridian.accent', { dark: '#8F82FF', light: '#4A3FD6', hcDark: focusBorder, hcLight: focusBorder }, localize('meridianAccent', "Meridian's accent: primary buttons, the active dock item, the brand mark."));
+export const MERIDIAN_ACCENT_FOREGROUND = registerColor('meridian.accentForeground', { dark: '#0A0C13', light: '#FFFFFF', hcDark: '#000000', hcLight: '#FFFFFF' }, localize('meridianAccentForeground', "Text on Meridian's accent color."));
+export const MERIDIAN_ACCENT_SOFT = registerColor('meridian.accentSoft', { dark: transparent(MERIDIAN_ACCENT, 0.16), light: transparent(MERIDIAN_ACCENT, 0.1), hcDark: null, hcLight: null }, localize('meridianAccentSoft', "A soft tint of Meridian's accent for selected items and chips."));
+export const MERIDIAN_ACCENT_SECONDARY = registerColor('meridian.accentSecondary', { dark: '#5FE3C9', light: '#0B7A68', hcDark: focusBorder, hcLight: focusBorder }, localize('meridianAccentSecondary', "Meridian's second accent: folders, ready and success states, run buttons."));
+export const MERIDIAN_WARNING = registerColor('meridian.warning', { dark: '#FFB86B', light: '#9E4410', hcDark: editorWarningForeground, hcLight: editorWarningForeground }, localize('meridianWarning', "Meridian's warning color: unsaved dots, warnings."));
+export const MERIDIAN_CANVAS = registerColor('meridian.canvas', { dark: '#0A0C13', light: '#E6E2DC', hcDark: editorBackground, hcLight: editorBackground }, localize('meridianCanvas', "The canvas behind Meridian's floating panels."));
+export const MERIDIAN_PANEL = registerColor('meridian.panel', { dark: '#11141F', light: '#F5F2ED', hcDark: editorBackground, hcLight: editorBackground }, localize('meridianPanel', "The background of Meridian's panels."));
+export const MERIDIAN_PANEL_RAISED = registerColor('meridian.panelRaised', { dark: '#181C2B', light: '#FFFFFF', hcDark: editorBackground, hcLight: editorBackground }, localize('meridianPanelRaised', "The background of cards and controls raised above a panel."));
+export const MERIDIAN_LINE = registerColor('meridian.line', { dark: '#FFFFFF12', light: '#1E18101A', hcDark: contrastBorder, hcLight: contrastBorder }, localize('meridianLine', "Meridian's hairline borders."));
+export const MERIDIAN_LINE_STRONG = registerColor('meridian.lineStrong', { dark: '#FFFFFF21', light: '#1E18102E', hcDark: contrastBorder, hcLight: contrastBorder }, localize('meridianLineStrong', "Meridian's borders around controls."));
+export const MERIDIAN_HOVER = registerColor('meridian.hover', { dark: '#FFFFFF0D', light: '#1E18100D', hcDark: null, hcLight: null }, localize('meridianHover', "Meridian's hover tint."));
+export const MERIDIAN_TEXT = registerColor('meridian.text', { dark: '#E7EAF3', light: '#1C1A22', hcDark: foreground, hcLight: foreground }, localize('meridianText', "Meridian's primary text."));
+export const MERIDIAN_TEXT_SECONDARY = registerColor('meridian.textSecondary', { dark: '#A5ADC4', light: '#4B4958', hcDark: foreground, hcLight: foreground }, localize('meridianTextSecondary', "Meridian's secondary text."));
+export const MERIDIAN_TEXT_MUTED = registerColor('meridian.textMuted', { dark: '#8189A6', light: '#68657A', hcDark: foreground, hcLight: foreground }, localize('meridianTextMuted', "Meridian's muted text: labels, hints."));

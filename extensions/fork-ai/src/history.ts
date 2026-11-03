@@ -10,9 +10,9 @@ export interface ChatTurn {
 	readonly role: 'user' | 'assistant';
 	text: string;
 	/** For user turns: the context block sent with this message, so later turns can replay it. */
-	readonly context?: string;
+	context?: string;
 	/** For user turns: short labels of the context that was attached, shown as chips. */
-	readonly chips?: readonly string[];
+	chips?: readonly string[];
 	error?: string;
 	readonly modelName?: string;
 	/** Agent turns: every model reply and tool result, replayed to the model on later agent turns. */

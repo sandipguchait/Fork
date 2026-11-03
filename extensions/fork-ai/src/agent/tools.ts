@@ -43,6 +43,19 @@ export const AGENT_TOOLS: readonly ToolDefinition[] = [
 		},
 	},
 	{
+		name: 'codebase_search',
+		description: 'Find code by what it does: searches the project index by keywords and, when an embedding model is set, by meaning. Returns the best-matching snippets with path and line numbers. Use it first when you do not know where something lives; use search for exact text or every usage.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				query: { type: 'string', description: 'What you are looking for, in words or identifiers, e.g. "where dates are parsed" or "retry logic for HTTP requests"' },
+				path: { type: 'string', description: 'Only search under this folder, relative to the workspace root' },
+				limit: { type: 'integer', description: 'How many snippets to return, 1 to 20. Defaults to 8.' },
+			},
+			required: ['query'],
+		},
+	},
+	{
 		name: 'edit_file',
 		description: 'Replace an exact piece of text in an existing file. old_text must match the file exactly, including indentation, and appear only once unless replace_all is true. Include enough surrounding lines to make it unique. Read the file first.',
 		inputSchema: {
@@ -79,10 +92,15 @@ export const AGENT_TOOLS: readonly ToolDefinition[] = [
 	},
 ];
 
+/** The agent's tools; codebase_search only when the project index is available. */
+export function agentTools(withCodebase: boolean): readonly ToolDefinition[] {
+	return withCodebase ? AGENT_TOOLS : AGENT_TOOLS.filter(tool => tool.name !== 'codebase_search');
+}
+
 export const AGENT_SYSTEM_PROMPT = [
 	'You are Fork, an AI coding agent working in the user\'s project inside their code editor.',
 	'Use the tools to look at the code, make the change and check it. Work step by step:',
-	'1. Find and read the relevant files before changing them. Never guess file contents.',
+	'1. Find and read the relevant files before changing them (codebase_search finds code by what it does). Never guess file contents.',
 	'2. Make focused edits with edit_file; use create_file only for new files.',
 	'3. When the project has tests or a build, run them with run_command and fix what fails.',
 	'4. Finish with a short summary of what you changed and anything left for the user.',
@@ -181,6 +199,7 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
 		}
 		case 'list_files': return `Listed ${str(args.pattern) || 'all files'}`;
 		case 'search': return `Searched for “${str(args.query)}”${args.include ? ` in ${str(args.include)}` : ''}`;
+		case 'codebase_search': return `Searched the codebase for “${str(args.query)}”${args.path ? ` in ${str(args.path)}` : ''}`;
 		case 'edit_file': return `Edited ${str(args.path)}`;
 		case 'create_file': return `Wrote ${str(args.path)}`;
 		case 'run_command': return `Ran ${str(args.command)}`;

@@ -6,7 +6,7 @@
 // Ollama, LM Studio, vLLM and most gateways speak this format.
 
 import { ModelRouterError, providerMessage } from '../errors.ts';
-import { basePath, getJson, joinPath, jsonPost, parseBaseUrl, sendStreaming } from '../http.ts';
+import { basePath, getJson, joinPath, jsonPost, parseBaseUrl, postJson, sendStreaming } from '../http.ts';
 import { parseJson, parseToolArguments, readSse } from '../sse.ts';
 import { partsOf, textOf, type Adapter, type ChatRequest, type FetchLike, type ModelConfig, type ModelInfo, type StopReason, type StreamEvent, type Usage } from '../types.ts';
 
@@ -14,15 +14,20 @@ export function chatCompletionsUrl(base: URL): URL {
 	return basePath(base).endsWith('/chat/completions') ? base : joinPath(base, '/chat/completions');
 }
 
-export function modelsUrl(base: URL): URL {
+function siblingUrl(base: URL, resource: string): URL {
 	const path = basePath(base);
-	if (path.endsWith('/chat/completions')) {
-		const url = new URL(base.toString());
-		url.pathname = path.slice(0, -'/chat/completions'.length) + '/models';
-		return url;
+	for (const suffix of ['/chat/completions', '/embeddings']) {
+		if (path.endsWith(suffix)) {
+			const url = new URL(base.toString());
+			url.pathname = path.slice(0, -suffix.length) + resource;
+			return url;
+		}
 	}
-	return joinPath(base, '/models');
+	return joinPath(base, resource);
 }
+
+export const modelsUrl = (base: URL) => siblingUrl(base, '/models');
+export const embeddingsUrl = (base: URL) => siblingUrl(base, '/embeddings');
 
 function headersFor(config: ModelConfig): Record<string, string> {
 	return {
@@ -172,4 +177,14 @@ async function listModels(config: ModelConfig, fetchFn: FetchLike): Promise<Mode
 		.map(entry => ({ id: entry.id as string }));
 }
 
-export const openAiAdapter: Adapter = { stream, listModels };
+async function embed(config: ModelConfig, texts: readonly string[], fetchFn: FetchLike, signal?: AbortSignal): Promise<number[][]> {
+	const base = parseBaseUrl(config.baseUrl);
+	const json = await postJson(fetchFn, embeddingsUrl(base), headersFor(config), { model: config.model, input: texts }, signal);
+	const data = json.data as { embedding?: unknown; index?: number }[] | undefined;
+	if (!Array.isArray(data) || data.length !== texts.length || data.some(entry => !Array.isArray(entry.embedding))) {
+		throw new ModelRouterError('protocol', 'The embeddings reply did not contain one vector per input. Check that the model is an embedding model.');
+	}
+	return [...data].sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map(entry => entry.embedding as number[]);
+}
+
+export const openAiAdapter: Adapter = { stream, listModels, embed };

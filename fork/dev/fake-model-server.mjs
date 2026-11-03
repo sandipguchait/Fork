@@ -9,6 +9,8 @@
 // Chat replies stream a short Markdown answer with a code block. Inline edits (Cmd+I) and Apply get a
 // predictable two-part change to the selected code, so the red/green review has something to show.
 // Agent mode runs a scripted fix of parseDate in fork/dev/sample-project, tests included.
+// Embeddings: model fake-embed on /v1/embeddings returns word-hash vectors, so codebase search can be
+// tried with an "embedding model" (Choose Embedding Model → Custom endpoint → same URL → fake-embed).
 
 import http from 'node:http';
 
@@ -92,6 +94,26 @@ function fakeAgentStep(messages) {
 		: 'I changed `parseDate`, but the tests did not pass (or did not run). Check the output above; **Undo all** puts the file back.'), stop];
 }
 
+/** Words that mean the same thing here share a slot, so the fake embeddings match a little by meaning. */
+const SYNONYMS = new Map(Object.entries({ signin: 'login', authenticate: 'login', auth: 'login', password: 'login', calendar: 'date', day: 'date', month: 'date', year: 'date', greeting: 'greet', hello: 'greet', welcome: 'greet' }));
+const DIMS = 256;
+
+/** A deterministic bag-of-words vector: each word (identifiers split) adds to a hashed slot. */
+function fakeEmbedding(text) {
+	const vector = new Array(DIMS).fill(0);
+	const words = text.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 1);
+	for (const raw of words) {
+		const singular = raw.replace(/s$/, '');
+		const word = SYNONYMS.get(singular) ?? singular;
+		let hash = 2166136261;
+		for (const char of word) {
+			hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+		}
+		vector[Math.abs(hash) % DIMS] += 1;
+	}
+	return vector;
+}
+
 const server = http.createServer((req, res) => {
 	let body = '';
 	req.on('data', chunk => { body += chunk; });
@@ -99,7 +121,20 @@ const server = http.createServer((req, res) => {
 		console.log(new Date().toISOString(), req.method, req.url);
 		if (req.method === 'GET' && req.url?.endsWith('/models')) {
 			res.writeHead(200, { 'content-type': 'application/json' });
-			res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-coder', object: 'model' }] }));
+			res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-coder', object: 'model' }, { id: 'fake-embed', object: 'model' }] }));
+			return;
+		}
+		if (req.method === 'POST' && req.url?.endsWith('/embeddings')) {
+			const request = JSON.parse(body || '{}');
+			if (!/embed/.test(String(request.model))) {
+				res.writeHead(400, { 'content-type': 'application/json' });
+				res.end(JSON.stringify({ error: { message: `${request.model} does not support embeddings` } }));
+				return;
+			}
+			const inputs = Array.isArray(request.input) ? request.input : [request.input];
+			await sleep(20);
+			res.writeHead(200, { 'content-type': 'application/json' });
+			res.end(JSON.stringify({ object: 'list', model: request.model, data: inputs.map((input, index) => ({ object: 'embedding', index, embedding: fakeEmbedding(String(input)) })) }));
 			return;
 		}
 		if (req.method !== 'POST' || !req.url?.endsWith('/chat/completions')) {

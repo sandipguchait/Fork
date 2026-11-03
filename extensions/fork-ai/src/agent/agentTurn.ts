@@ -7,8 +7,8 @@ import { createModelClient, type ChatMessage, type ModelConfig } from '../../../
 import { countChanges } from '../diff.ts';
 import type { AgentStepRecord, ChatTurn } from '../history.ts';
 import { runAgent } from './loop.ts';
-import { AGENT_SYSTEM_PROMPT, AGENT_TOOLS, describeToolCall } from './tools.ts';
-import { WorkspaceTools, type ApprovalDecision } from './workspaceTools.ts';
+import { AGENT_SYSTEM_PROMPT, agentTools, describeToolCall } from './tools.ts';
+import { WorkspaceTools, type ApprovalDecision, type CodebaseSearch } from './workspaceTools.ts';
 
 /** Project rules added to the system prompt, first found wins. */
 export const RULES_FILES = ['.fork/rules.md', 'AGENTS.md', '.cursorrules'];
@@ -57,6 +57,8 @@ export interface AgentTurnOptions {
 	readonly askApproval: (step: AgentStepRecord, command: string, allowAlways: boolean) => Promise<ApprovalDecision>;
 	/** Called whenever the reply's steps change. */
 	readonly onUpdate: () => void;
+	/** The project index, when indexing is on. */
+	readonly codebase?: CodebaseSearch;
 }
 
 /** Runs one agent turn, filling in the reply's steps, transcript, text and checkpoint as it goes. */
@@ -73,6 +75,7 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<'done' | 
 		checkpoint,
 		allowedCommands: options.allowedCommands,
 		allowAlways: options.allowAlways,
+		codebase: options.codebase,
 		requestApproval: (callId, command, need) => {
 			const step = toolSteps.get(callId);
 			return step ? options.askApproval(step, command, need === 'ask') : Promise.resolve('skip');
@@ -86,7 +89,7 @@ export async function runAgentTurn(options: AgentTurnOptions): Promise<'done' | 
 		client: createModelClient(options.config),
 		system,
 		messages: options.messages,
-		tools: AGENT_TOOLS,
+		tools: agentTools(Boolean(options.codebase)),
 		signal: options.signal,
 		execute: (call, signal) => tools.execute(call, signal),
 		events: {

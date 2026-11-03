@@ -10,7 +10,10 @@ import { API_FORMAT_LABELS, guessApiFormat, PROVIDER_PRESETS, shortModelName, ty
 const STEPS = 5;
 const LIST_TIMEOUT_MS = 10_000;
 
+export type ModelPurpose = 'chat' | 'embedding';
+
 interface Draft {
+	purpose: ModelPurpose;
 	preset: ProviderPreset;
 	apiFormat: ApiFormat;
 	baseUrl: string;
@@ -19,20 +22,35 @@ interface Draft {
 	displayName: string;
 }
 
+let purposeTitle = 'Add model';
+
 function title(step: number, text: string): string {
-	return `Add model (${step}/${STEPS}): ${text}`;
+	return `${purposeTitle} (${step}/${STEPS}): ${text}`;
 }
 
-async function pickPreset(): Promise<ProviderPreset | undefined> {
+async function pickPreset(purpose: ModelPurpose): Promise<ProviderPreset | undefined> {
+	const presets = purpose === 'embedding' ? PROVIDER_PRESETS.filter(preset => preset.embeddingModel !== undefined) : PROVIDER_PRESETS;
 	const picked = await vscode.window.showQuickPick(
-		PROVIDER_PRESETS.map(preset => ({ label: preset.label, description: preset.baseUrl, detail: preset.detail, preset })),
-		{ title: title(1, 'provider'), placeHolder: 'Where does the model run?', matchOnDescription: true, ignoreFocusOut: true },
+		presets.map(preset => ({
+			label: preset.label,
+			description: preset.baseUrl,
+			detail: purpose === 'embedding' && preset.embeddingModel ? `${preset.detail} · e.g. ${preset.embeddingModel}` : preset.detail,
+			preset,
+		})),
+		{
+			title: title(1, 'provider'),
+			placeHolder: purpose === 'embedding' ? 'Where does the embedding model run? Ollama with nomic-embed-text is free and keeps your code on this computer.' : 'Where does the model run?',
+			matchOnDescription: true,
+			ignoreFocusOut: true,
+		},
 	);
 	return picked?.preset;
 }
 
 async function pickApiFormat(suggested: ApiFormat): Promise<ApiFormat | undefined> {
-	const formats = (Object.keys(API_FORMAT_LABELS) as ApiFormat[]).sort((a, b) => (a === suggested ? -1 : b === suggested ? 1 : 0));
+	const formats = (Object.keys(API_FORMAT_LABELS) as ApiFormat[])
+		.filter(format => purposeTitle === 'Add model' || format !== 'anthropic')
+		.sort((a, b) => (a === suggested ? -1 : b === suggested ? 1 : 0));
 	const picked = await vscode.window.showQuickPick(
 		formats.map(format => ({ label: API_FORMAT_LABELS[format].label, detail: API_FORMAT_LABELS[format].detail, format })),
 		{ title: title(2, 'API format'), placeHolder: 'Which request format does the endpoint use?', ignoreFocusOut: true },
@@ -93,8 +111,10 @@ async function pickModelName(draft: Draft): Promise<string | undefined> {
 
 	const timeoutFetch: FetchLike = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(LIST_TIMEOUT_MS) });
 	createModelClient(configOf(draft, 'probe'), { fetch: timeoutFetch }).listModels().then(models => {
+		// For embeddings, models that look like embedding models come first.
+		const rank = (id: string) => draft.purpose === 'embedding' && !/embed/i.test(id) ? 1 : 0;
 		listed = models
-			.sort((a, b) => a.id.localeCompare(b.id))
+			.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id))
 			.map(model => ({ label: model.id, description: model.displayName && model.displayName !== model.id ? model.displayName : undefined }));
 		quickPick.placeholder = listed.length ? `${listed.length} models available. Pick one or type a model name.` : 'This endpoint lists no models. Type the model name.';
 	}, () => {
@@ -124,7 +144,7 @@ async function pickModelName(draft: Draft): Promise<string | undefined> {
 async function askDisplayName(draft: Draft): Promise<string | undefined> {
 	const name = await vscode.window.showInputBox({
 		title: title(5, 'display name'),
-		prompt: 'Shown in the model picker.',
+		prompt: draft.purpose === 'embedding' ? 'Shown in Manage Models and the index status.' : 'Shown in the model picker.',
 		value: draft.displayName || `${shortModelName(draft.model)} · ${draft.preset.id === 'custom' ? new URL(draft.baseUrl).host : draft.preset.label}`,
 		ignoreFocusOut: true,
 		validateInput: text => text.trim() ? undefined : 'Enter a name.',
@@ -154,6 +174,21 @@ export function describeReport(report: ConnectionReport): string {
 	return `${speed}${tools}`.trim();
 }
 
+/** Embeds a short text: proves the endpoint, key and model work, and learns the vector size. */
+export async function testEmbedding(config: ModelConfig): Promise<{ dims: number } | { error: string }> {
+	return vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title: `Testing ${config.displayName}…`, cancellable: false },
+		async () => {
+			try {
+				const [vector] = await createModelClient(config).embed(['function parseDate(input) { return new Date(input); }'], AbortSignal.timeout(30_000));
+				return vector?.length ? { dims: vector.length } : { error: 'The endpoint returned an empty embedding.' };
+			} catch (error) {
+				return { error: error instanceof Error ? error.message : String(error) };
+			}
+		},
+	);
+}
+
 async function runTest(config: ModelConfig): Promise<ConnectionReport> {
 	return vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: `Testing ${config.displayName}…`, cancellable: false },
@@ -161,13 +196,26 @@ async function runTest(config: ModelConfig): Promise<ConnectionReport> {
 	);
 }
 
-/** The five-step flow behind Fork AI: Add Model. Returns the new model's id, or undefined if cancelled. */
-export async function addModel(store: ModelStore): Promise<string | undefined> {
-	const preset = await pickPreset();
+/**
+ * The five-step flow behind Fork AI: Add Model. With purpose "embedding" it adds a model for
+ * codebase search instead, tested by embedding a line of code, and makes it the embedding model.
+ * Returns the new model's id, or undefined if cancelled.
+ */
+export async function addModel(store: ModelStore, purpose: ModelPurpose = 'chat'): Promise<string | undefined> {
+	purposeTitle = purpose === 'embedding' ? 'Add embedding model' : 'Add model';
+	const preset = await pickPreset(purpose);
 	if (!preset) {
 		return undefined;
 	}
-	const draft: Draft = { preset, apiFormat: preset.apiFormat ?? 'openai', baseUrl: preset.baseUrl, apiKey: '', model: '', displayName: '' };
+	const draft: Draft = {
+		purpose,
+		preset,
+		apiFormat: preset.apiFormat ?? 'openai',
+		baseUrl: preset.baseUrl,
+		apiKey: '',
+		model: purpose === 'embedding' ? preset.embeddingModel ?? '' : '',
+		displayName: '',
+	};
 
 	while (true) {
 		const url = await askUrl(draft.baseUrl);
@@ -202,6 +250,22 @@ export async function addModel(store: ModelStore): Promise<string | undefined> {
 		draft.displayName = name;
 
 		const config = configOf(draft, ModelStore.newId());
+
+		if (purpose === 'embedding') {
+			const result = await testEmbedding(config);
+			if ('dims' in result) {
+				await store.save(config, { embeddingDims: result.dims });
+				await store.setEmbedModel(config.id);
+				void vscode.window.showInformationMessage(`Added ${config.displayName} (${result.dims} dimensions). Fork is now embedding your code for semantic search.`);
+				return config.id;
+			}
+			const choice = await vscode.window.showErrorMessage(`Could not embed with ${config.displayName}: ${result.error}`, { modal: false }, 'Edit and Retry');
+			if (choice !== 'Edit and Retry') {
+				return undefined;
+			}
+			continue;
+		}
+
 		const report = await runTest(config);
 
 		if (report.streaming) {
@@ -232,6 +296,16 @@ export async function addModel(store: ModelStore): Promise<string | undefined> {
 export async function retestModel(store: ModelStore, id: string): Promise<void> {
 	const config = await store.resolve(id);
 	if (!config) {
+		return;
+	}
+	if (store.get(id)?.embeddingDims) {
+		const result = await testEmbedding(config);
+		if ('dims' in result) {
+			await store.save(config, { embeddingDims: result.dims });
+			void vscode.window.showInformationMessage(`${config.displayName} works: it returns ${result.dims}-dimension embeddings.`);
+		} else {
+			void vscode.window.showErrorMessage(`${config.displayName} failed: ${result.error}`);
+		}
 		return;
 	}
 	const report = await runTest(config);

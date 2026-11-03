@@ -20,6 +20,7 @@ const ICONS = {
 	stop: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>',
 	close: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 	file: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.75h5L12.25 5v9.25H4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 1.75V5h3.25" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+	search: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.2 10.2 13.5 13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 	plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
 	check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 	error: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5M8 10.8v.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
@@ -59,7 +60,7 @@ const composer = el('div', 'composer');
 const chips = el('div', 'chips');
 const input = el('textarea', 'input');
 input.rows = 1;
-input.placeholder = 'Ask about your code. Type @ to add a file.';
+input.placeholder = 'Ask about your code. Type @ to add a file or the codebase.';
 input.setAttribute('aria-label', 'Message');
 const footer = el('div', 'composer-footer');
 const modeSelect = el('select', 'mode-select');
@@ -169,7 +170,7 @@ function renderTurn(turn: TurnView): HTMLElement {
 			const used = el('div', 'turn-chips');
 			for (const label of turn.chips) {
 				const chip = el('span', 'chip small');
-				chip.innerHTML = ICONS.file;
+				chip.innerHTML = label.startsWith('Codebase') ? ICONS.search : ICONS.file;
 				chip.append(el('span', undefined, label));
 				used.append(chip);
 			}
@@ -334,7 +335,7 @@ function renderEmpty(current: ChatState): HTMLElement {
 	const tips = el('ul', 'empty-tips');
 	const lines = agent
 		? ['It reads and searches your project, edits files and runs commands such as tests.', 'Commands that are not read-only wait for your approval.', 'When it is done, review each changed file or undo everything in one click.']
-		: ['The open file is sent with your message. Remove its chip to leave it out.', 'Select code and press Cmd+L (Ctrl+L) to add it here.', 'Type @ to add another file. Switch to Agent below for multi-step tasks.'];
+		: ['The open file is sent with your message. Remove its chip to leave it out.', 'Select code and press Cmd+L (Ctrl+L) to add it here.', 'Type @ to add a file, or Codebase to search the whole project. Switch to Agent below for multi-step tasks.'];
 	for (const tip of lines) {
 		tips.append(el('li', undefined, tip));
 	}
@@ -345,7 +346,7 @@ function renderEmpty(current: ChatState): HTMLElement {
 function chipNode(chip: ContextChip, options: { excluded?: boolean; onRemove?: () => void; onToggle?: () => void }): HTMLElement {
 	const node = el('span', `chip${options.excluded ? ' excluded' : ''}${chip.kind === 'current' ? ' current' : ''}`);
 	node.title = chip.title;
-	node.innerHTML = ICONS.file;
+	node.innerHTML = chip.kind === 'codebase' ? ICONS.search : ICONS.file;
 	node.append(el('span', 'chip-label', chip.label));
 	if (chip.kind === 'current') {
 		node.append(el('span', 'chip-note', options.excluded ? 'not sent' : 'current file'));
@@ -379,7 +380,7 @@ function renderChips(current: ChatState): void {
 	for (const attachment of current.attachments) {
 		chips.append(chipNode(attachment, { onRemove: () => post({ type: 'removeAttachment', id: attachment.id }) }));
 	}
-	const add = iconButton('chip add-context', ICONS.plus, 'Add a file to the context (@)', () => post({ type: 'attachFile' }));
+	const add = iconButton('chip add-context', ICONS.plus, 'Add files or the whole codebase to the context (@)', () => post({ type: 'attachFile' }));
 	add.append(el('span', 'chip-label', 'Add context'));
 	chips.append(add);
 }
@@ -426,7 +427,7 @@ function render(): void {
 	renderChips(state);
 	renderModels(state);
 	modeSelect.value = state.mode;
-	input.placeholder = state.mode === 'agent' ? 'Describe a task, e.g. fix the failing test in dates.ts' : 'Ask about your code. Type @ to add a file.';
+	input.placeholder = state.mode === 'agent' ? 'Describe a task, e.g. fix the failing test in dates.ts' : 'Ask about your code. Type @ to add a file or the codebase.';
 	warning.textContent = state.agentWarning ?? '';
 	warning.hidden = !state.agentWarning;
 	sendButton.innerHTML = state.busy ? ICONS.stop : ICONS.send;

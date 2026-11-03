@@ -21,11 +21,14 @@ export type StoredModel = Omit<ModelConfig, 'apiKey'> & {
 	readonly hasKey: boolean;
 	/** From the last connection test: whether the model can call tools, which the agent needs. */
 	readonly toolCalling?: boolean;
+	/** Set for models added for codebase search: they make embeddings and cannot chat. */
+	readonly embeddingDims?: number;
 };
 
 const MODELS_KEY = 'forkAi.models';
 const CHAT_MODEL_KEY = 'forkAi.chatModel';
 const EDIT_MODEL_KEY = 'forkAi.editModel';
+const EMBED_MODEL_KEY = 'forkAi.embedModel';
 const secretKey = (id: string) => `forkAi.apiKey.${id}`;
 
 export class ModelStore {
@@ -46,8 +49,13 @@ export class ModelStore {
 		return this.list().find(model => model.id === id);
 	}
 
+	/** Models that can chat: everything except embedding-only models. */
+	chatModels(): StoredModel[] {
+		return this.list().filter(model => !model.embeddingDims);
+	}
+
 	/** Adds or replaces a model. An empty or missing key removes the stored key. */
-	async save(config: ModelConfig, tested?: { readonly toolCalling?: boolean }): Promise<void> {
+	async save(config: ModelConfig, tested?: { readonly toolCalling?: boolean; readonly embeddingDims?: number }): Promise<void> {
 		const { apiKey, ...rest } = config;
 		if (apiKey) {
 			await this.secrets.store(secretKey(config.id), apiKey);
@@ -57,14 +65,20 @@ export class ModelStore {
 		const models = this.list();
 		const index = models.findIndex(model => model.id === config.id);
 		const toolCalling = tested?.toolCalling ?? models[index]?.toolCalling;
-		const stored: StoredModel = { ...rest, hasKey: Boolean(apiKey), ...(toolCalling !== undefined ? { toolCalling } : {}) };
+		const embeddingDims = tested?.embeddingDims ?? models[index]?.embeddingDims;
+		const stored: StoredModel = {
+			...rest,
+			hasKey: Boolean(apiKey),
+			...(toolCalling !== undefined ? { toolCalling } : {}),
+			...(embeddingDims ? { embeddingDims } : {}),
+		};
 		if (index === -1) {
 			models.push(stored);
 		} else {
 			models[index] = stored;
 		}
 		await this.state.update(MODELS_KEY, models);
-		if (!this.state.get<string>(CHAT_MODEL_KEY)) {
+		if (!this.state.get<string>(CHAT_MODEL_KEY) && !stored.embeddingDims) {
 			await this.state.update(CHAT_MODEL_KEY, config.id);
 		}
 		this.fire();
@@ -75,10 +89,13 @@ export class ModelStore {
 		const models = this.list().filter(model => model.id !== id);
 		await this.state.update(MODELS_KEY, models);
 		if (this.state.get<string>(CHAT_MODEL_KEY) === id) {
-			await this.state.update(CHAT_MODEL_KEY, models[0]?.id);
+			await this.state.update(CHAT_MODEL_KEY, models.find(model => !model.embeddingDims)?.id);
 		}
 		if (this.state.get<string>(EDIT_MODEL_KEY) === id) {
 			await this.state.update(EDIT_MODEL_KEY, undefined);
+		}
+		if (this.state.get<string>(EMBED_MODEL_KEY) === id) {
+			await this.state.update(EMBED_MODEL_KEY, undefined);
 		}
 		this.fire();
 	}
@@ -89,7 +106,7 @@ export class ModelStore {
 		if (!stored) {
 			return undefined;
 		}
-		const { hasKey, toolCalling: _toolCalling, ...rest } = stored;
+		const { hasKey, toolCalling: _toolCalling, embeddingDims: _embeddingDims, ...rest } = stored;
 		const apiKey = hasKey ? await this.secrets.get(secretKey(id)) : undefined;
 		return apiKey ? { ...rest, apiKey } : rest;
 	}
@@ -97,12 +114,12 @@ export class ModelStore {
 	/** The model chat uses: the one picked, else the first one added. */
 	chatModelId(): string | undefined {
 		const chosen = this.state.get<string>(CHAT_MODEL_KEY);
-		const models = this.list();
+		const models = this.chatModels();
 		return models.some(model => model.id === chosen) ? chosen : models[0]?.id;
 	}
 
 	async setChatModel(id: string): Promise<void> {
-		if (!this.get(id)) {
+		if (!this.get(id) || this.get(id)?.embeddingDims) {
 			return;
 		}
 		await this.state.update(CHAT_MODEL_KEY, id);
@@ -122,10 +139,24 @@ export class ModelStore {
 	}
 
 	async setEditModel(id: string | undefined): Promise<void> {
-		if (id !== undefined && !this.get(id)) {
+		if (id !== undefined && (!this.get(id) || this.get(id)?.embeddingDims)) {
 			return;
 		}
 		await this.state.update(EDIT_MODEL_KEY, id);
+		this.fire();
+	}
+
+	/** The model that embeds code for semantic codebase search; undefined means keyword search only. */
+	embedModelId(): string | undefined {
+		const chosen = this.state.get<string>(EMBED_MODEL_KEY);
+		return chosen && this.get(chosen) ? chosen : undefined;
+	}
+
+	async setEmbedModel(id: string | undefined): Promise<void> {
+		if (id !== undefined && !this.get(id)) {
+			return;
+		}
+		await this.state.update(EMBED_MODEL_KEY, id);
 		this.fire();
 	}
 

@@ -89,3 +89,36 @@ test('registry assigns roles with fallbacks', () => {
 	assert.equal(registry.modelFor('chat')?.id, 'big');
 	assert.throws(() => registry.assign('agent', 'missing'), isInvalidConfig);
 });
+
+test('embeddings: OpenAI-compatible and Gemini, in batches, in order', async () => {
+	const { fetch, calls } = mockFetch(call => {
+		if (call.url.includes(':batchEmbedContents')) {
+			const requests = call.body?.requests as unknown[];
+			return jsonResponse(200, { embeddings: requests.map((_, i) => ({ values: [i, 1] })) });
+		}
+		const input = call.body?.input as string[];
+		// Out of order on purpose: results are matched back by index.
+		return jsonResponse(200, { data: input.map((_, i) => ({ index: i, embedding: [i, 0] })).reverse() });
+	});
+	const texts = Array.from({ length: 70 }, (_, i) => `t${i}`);
+	const openai = await createModelClient({ ...base, baseUrl: 'http://localhost:11434/v1', model: 'nomic-embed-text' }, { fetch }).embed(texts);
+	assert.equal(openai.length, 70);
+	assert.deepEqual(openai[0], [0, 0]);
+	assert.deepEqual(openai[69], [5, 0], 'second batch restarts at index 0');
+	assert.equal(calls.length, 2, 'two batches of at most 64');
+	assert.equal(calls[0].url, 'http://localhost:11434/v1/embeddings');
+	assert.deepEqual(calls[0].body, { model: 'nomic-embed-text', input: texts.slice(0, 64) });
+
+	const gemini = await createModelClient({ ...base, apiFormat: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', model: 'models/text-embedding-004', apiKey: 'k' }, { fetch }).embed(['a', 'b']);
+	assert.deepEqual(gemini, [[0, 1], [1, 1]]);
+	assert.equal(calls[2].url, 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents');
+	assert.deepEqual(calls[2].body, { requests: [{ model: 'models/text-embedding-004', content: { parts: [{ text: 'a' }] } }, { model: 'models/text-embedding-004', content: { parts: [{ text: 'b' }] } }] });
+});
+
+test('embeddings: a chat model or an Anthropic model gives a clear error', async () => {
+	const wrongShape = mockFetch(() => jsonResponse(200, { choices: [] }));
+	await assert.rejects(createModelClient(base, { fetch: wrongShape.fetch }).embed(['x']), (error: unknown) => error instanceof ModelRouterError && error.kind === 'protocol' && /embedding model/.test(error.message));
+	const missing = mockFetch(() => jsonResponse(404, { error: { message: 'model not found' } }));
+	await assert.rejects(createModelClient(base, { fetch: missing.fetch }).embed(['x']), (error: unknown) => error instanceof ModelRouterError && error.kind === 'not_found');
+	await assert.rejects(createModelClient({ ...base, apiFormat: 'anthropic' }).embed(['x']), (error: unknown) => error instanceof ModelRouterError && error.kind === 'invalid_config' && /no embeddings endpoint/.test(error.message));
+});

@@ -128,11 +128,15 @@ export interface ModelClient {
 	stream(request: ChatRequest): AsyncIterable<StreamEvent>;
 	complete(request: ChatRequest): Promise<CompletionResult>;
 	listModels(): Promise<ModelInfo[]>;
+	/** One vector per text, in order. Sent in batches; throws for formats without embeddings (Anthropic). */
+	embed(texts: readonly string[], signal?: AbortSignal): Promise<number[][]>;
 }
 
 export interface Adapter {
 	stream(config: ModelConfig, request: ChatRequest, fetchFn: FetchLike): AsyncGenerator<StreamEvent>;
 	listModels(config: ModelConfig, fetchFn: FetchLike): Promise<ModelInfo[]>;
+	/** Embeds one batch. Absent when the API has no embeddings endpoint. */
+	embed?(config: ModelConfig, texts: readonly string[], fetchFn: FetchLike, signal?: AbortSignal): Promise<number[][]>;
 }
 
 export function partsOf(message: ChatMessage): readonly ContentPart[] {

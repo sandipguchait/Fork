@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { ModelRouterError, type ChatRequest, type StreamEvent, type ToolCallPart } from '../../../fork/model-router/src/index.ts';
 import { approvalFor, isDangerousCommand } from '../src/agent/approvals.ts';
 import { runAgent, type ToolOutcome } from '../src/agent/loop.ts';
-import { AGENT_TOOLS, describeToolCall, MAX_READ_LINES, normalizeRelativePath, numberLines, replaceText, truncateOutput } from '../src/agent/tools.ts';
+import { AGENT_TOOLS, agentTools, describeToolCall, MAX_READ_LINES, normalizeRelativePath, numberLines, replaceText, truncateOutput } from '../src/agent/tools.ts';
 import { buildMessages } from '../src/context.ts';
 import type { ChatTurn } from '../src/history.ts';
 
@@ -41,7 +41,10 @@ test('reads come back numbered and capped', () => {
 });
 
 test('every tool has a schema and a readable card title', () => {
-	assert.deepEqual(AGENT_TOOLS.map(tool => tool.name), ['read_file', 'list_files', 'search', 'edit_file', 'create_file', 'run_command']);
+	assert.deepEqual(AGENT_TOOLS.map(tool => tool.name), ['read_file', 'list_files', 'search', 'codebase_search', 'edit_file', 'create_file', 'run_command']);
+	assert.deepEqual(agentTools(false).map(tool => tool.name), ['read_file', 'list_files', 'search', 'edit_file', 'create_file', 'run_command'], 'no index, no codebase_search');
+	assert.equal(agentTools(true), AGENT_TOOLS);
+	assert.equal(describeToolCall('codebase_search', { query: 'date parsing', path: 'src' }), 'Searched the codebase for “date parsing” in src');
 	assert.equal(describeToolCall('read_file', { path: 'a.ts', start_line: 10, end_line: 20 }), 'Read a.ts lines 10-20');
 	assert.equal(describeToolCall('search', { query: 'parseDate', include: 'src/**' }), 'Searched for “parseDate” in src/**');
 	assert.equal(describeToolCall('run_command', { command: 'npm test' }), 'Ran npm test');

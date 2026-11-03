@@ -5,10 +5,12 @@
 import * as vscode from 'vscode';
 import { addModel, changeKey, retestModel } from './addModel.ts';
 import type { ModelStore, StoredModel } from './modelStore.ts';
+import { chooseEmbeddingModel } from './index/statusBar.ts';
 import { API_FORMAT_LABELS } from './presets.ts';
 
 interface ModelItem extends vscode.QuickPickItem {
 	readonly model?: StoredModel;
+	readonly action?: 'embedding';
 }
 
 const TEST = { iconPath: new vscode.ThemeIcon('beaker'), tooltip: 'Test connection' };
@@ -30,25 +32,33 @@ export function modelDetail(model: StoredModel): string {
 export async function manageModels(store: ModelStore): Promise<void> {
 	const quickPick = vscode.window.createQuickPick<ModelItem>();
 	quickPick.title = 'Models';
-	quickPick.placeholder = 'Pick a model to use for chat. The pencil button picks the model for inline edits.';
+	quickPick.placeholder = 'Pick a model to use for chat (or, for an embedding model, for codebase search). The pencil button picks the model for inline edits.';
 	quickPick.matchOnDetail = true;
 
 	const refresh = () => {
 		const chatId = store.chatModelId();
 		const editId = store.hasOwnEditModel() ? store.editModelId() : undefined;
+		const embedId = store.embedModelId();
+		const embedModel = embedId ? store.get(embedId) : undefined;
 		quickPick.items = [
 			...store.list().map((model): ModelItem => {
-				const roles = [model.id === chatId ? 'chat' : '', model.id === editId ? 'inline edits' : ''].filter(Boolean);
+				const roles = [
+					model.id === chatId ? 'chat' : '',
+					model.id === editId ? 'inline edits' : '',
+					model.id === embedId ? 'codebase search' : model.embeddingDims ? 'embeddings' : '',
+				].filter(Boolean);
+				const active = model.id === chatId || model.id === embedId;
 				return {
-					label: `${model.id === chatId ? '$(check) ' : ''}${model.displayName}`,
+					label: `${active ? '$(check) ' : ''}${model.displayName}`,
 					description: roles.length ? roles.join(' · ') : undefined,
 					detail: modelDetail(model),
-					buttons: [EDIT, TEST, KEY, REMOVE],
+					buttons: model.embeddingDims ? [TEST, KEY, REMOVE] : [EDIT, TEST, KEY, REMOVE],
 					model,
 				};
 			}),
 			{ label: '', kind: vscode.QuickPickItemKind.Separator },
 			{ label: '$(add) Add model…', alwaysShow: true },
+			{ label: '$(search) Codebase search…', description: embedModel ? `semantic with ${embedModel.displayName}` : 'keywords only', alwaysShow: true, action: 'embedding' },
 		];
 	};
 	refresh();
@@ -79,8 +89,12 @@ export async function manageModels(store: ModelStore): Promise<void> {
 	quickPick.onDidAccept(async () => {
 		const item = quickPick.selectedItems[0];
 		quickPick.hide();
-		if (item?.model) {
+		if (item?.model?.embeddingDims) {
+			await store.setEmbedModel(item.model.id);
+		} else if (item?.model) {
 			await store.setChatModel(item.model.id);
+		} else if (item?.action === 'embedding') {
+			await chooseEmbeddingModel(store);
 		} else if (item) {
 			await addModel(store);
 		}

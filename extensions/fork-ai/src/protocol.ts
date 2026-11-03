@@ -14,7 +14,7 @@ export interface ContextChip {
 	readonly id: string;
 	readonly label: string;
 	readonly title: string;
-	readonly kind: 'current' | 'file' | 'selection';
+	readonly kind: 'current' | 'file' | 'selection' | 'codebase';
 }
 
 export interface StepView {

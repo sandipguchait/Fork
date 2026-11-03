@@ -7,6 +7,8 @@ import { addModel } from './addModel.ts';
 import { CHAT_VIEW_ID, ChatViewProvider } from './chatView.ts';
 import { ChatHistory } from './history.ts';
 import { InlineEditController } from './inlineEdit.ts';
+import { CodebaseIndexService } from './index/service.ts';
+import { chooseEmbeddingModel, createIndexStatusBar, showIndexMenu } from './index/statusBar.ts';
 import { manageModels } from './manageModels.ts';
 import { ModelStore } from './modelStore.ts';
 
@@ -15,10 +17,14 @@ export function activate(context: vscode.ExtensionContext): void {
 	const store = new ModelStore(context.globalState, context.secrets);
 	// Chats belong to the project they were about.
 	const history = new ChatHistory(context.workspaceState);
-	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState);
+	// The codebase index: kept in memory, embeddings cached in this workspace's storage.
+	const codebase = new CodebaseIndexService(context.storageUri, store);
+	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState, codebase);
 	const inlineEdit = new InlineEditController(store);
 
 	context.subscriptions.push(
+		codebase,
+		createIndexStatusBar(codebase),
 		chat,
 		inlineEdit,
 		vscode.window.registerWebviewViewProvider(CHAT_VIEW_ID, chat, { webviewOptions: { retainContextWhenHidden: true } }),
@@ -27,6 +33,26 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('forkAi.newChat', () => chat.newChat()),
 		vscode.commands.registerCommand('forkAi.addModel', () => addModel(store)),
 		vscode.commands.registerCommand('forkAi.manageModels', () => store.list().length ? manageModels(store) : addModel(store)),
+		vscode.commands.registerCommand('forkAi.chooseEmbeddingModel', () => chooseEmbeddingModel(store)),
+		vscode.commands.registerCommand('forkAi.reindex', () => codebase.rebuild()),
+		vscode.commands.registerCommand('forkAi.indexMenu', () => showIndexMenu(codebase, store)),
+		vscode.commands.registerCommand('forkAi.addCodebaseToChat', async () => {
+			chat.addCodebase();
+			await chat.reveal();
+		}),
+		vscode.commands.registerCommand('forkAi.editForkignore', async () => {
+			const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+			if (!root) {
+				return;
+			}
+			const uri = vscode.Uri.joinPath(root, '.forkignore');
+			try {
+				await vscode.workspace.fs.stat(uri);
+			} catch {
+				await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode('# Files Fork AI leaves out of the codebase index, in .gitignore syntax.\n# .gitignore is followed too.\n\n'));
+			}
+			await vscode.window.showTextDocument(uri);
+		}),
 
 		vscode.commands.registerCommand('forkAi.inlineEdit', async () => {
 			const editor = vscode.window.activeTextEditor;
@@ -87,6 +113,8 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		}),
 	);
+
+	codebase.start();
 }
 
 export function deactivate(): void {

@@ -1,8 +1,8 @@
 {
 	"name": "fork-ai",
 	"displayName": "Fork AI",
-	"description": "Chat, inline edits and an agent on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
-	"version": "0.3.0",
+	"description": "Chat, inline edits, an agent and codebase search on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
+	"version": "0.4.0",
 	"publisher": "fork",
 	"license": "MIT",
 	"private": true,
@@ -10,6 +10,9 @@
 		"vscode": "^1.100.0"
 	},
 	"main": "./dist/extension",
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"categories": [
 		"AI",
 		"Chat"
@@ -116,6 +119,31 @@
 			{
 				"command": "forkAi.applyCode",
 				"title": "Apply Code from Chat",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.addCodebaseToChat",
+				"title": "Add Codebase to Chat",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.reindex",
+				"title": "Reindex Codebase",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.chooseEmbeddingModel",
+				"title": "Choose Embedding Model for Codebase Search",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.indexMenu",
+				"title": "Codebase Index",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.editForkignore",
+				"title": "Edit .forkignore",
 				"category": "Fork AI"
 			}
 		],
@@ -243,6 +271,37 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Send the open file with each chat message. You can still remove it per message from the chat box."
+				},
+				"forkAi.index.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Index the open folder for codebase search: the agent's codebase_search tool and Codebase context in chat. The index stays on this computer; only with an embedding model set is code sent, to that model's endpoint."
+				},
+				"forkAi.index.maxFiles": {
+					"type": "number",
+					"default": 15000,
+					"minimum": 100,
+					"description": "Most files to index. Source files are indexed before tests and fixtures."
+				},
+				"forkAi.index.maxFileSizeKB": {
+					"type": "number",
+					"default": 512,
+					"minimum": 1,
+					"description": "Files larger than this are left out of the index."
+				},
+				"forkAi.index.maxTotalSizeMB": {
+					"type": "number",
+					"default": 100,
+					"minimum": 1,
+					"description": "Indexing stops once this much text is indexed. The index uses about 2-3 times this in memory."
+				},
+				"forkAi.index.exclude": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "More files to leave out of the index, in .gitignore syntax, e.g. \"fixtures/\" or \"*.generated.ts\". .gitignore and .forkignore are followed too."
 				}
 			}
 		}

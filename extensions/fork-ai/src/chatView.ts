@@ -6,8 +6,10 @@ import * as vscode from 'vscode';
 import { createModelClient, ModelRouterError } from '../../../fork/model-router/src/index.ts';
 import { readRules, restoreCheckpoint, runAgentTurn, summarizeChanges, withRules } from './agent/agentTurn.ts';
 import type { ApprovalDecision } from './agent/workspaceTools.ts';
-import { attachmentLabel, buildMessages, currentFileLabel, HISTORY_BUDGET_CHARS, renderContext, SYSTEM_PROMPT, type Attachment, type EditorContext } from './context.ts';
+import { attachmentLabel, buildMessages, currentFileLabel, HISTORY_BUDGET_CHARS, renderContext, SYSTEM_PROMPT, type Attachment, type EditorContext, type ExtraContext } from './context.ts';
 import { ChatHistory, newId, newSession, titleFor, type AgentStepRecord, type ChatSession, type ChatTurn } from './history.ts';
+import type { CodebaseIndexService } from './index/service.ts';
+import { renderCodebaseBlock, takeCodebaseMention } from './index/snippets.ts';
 import { modelDetail } from './manageModels.ts';
 import type { KeyValueStore, ModelStore } from './modelStore.ts';
 import type { ChatMode, ChatState, ContextChip, FromWebview, ToWebview } from './protocol.ts';
@@ -46,6 +48,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 	private session: ChatSession;
 	private attachments: Attachment[] = [];
 	private currentFileExcluded = false;
+	/** "Codebase" picked from Add context: search the project for the next message. */
+	private codebaseAttached = false;
 	private lastEditor: vscode.TextEditor | undefined;
 	private abort: AbortController | undefined;
 	private streamingTurnId: string | undefined;
@@ -60,6 +64,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		private readonly store: ModelStore,
 		private readonly history: ChatHistory,
 		private readonly workspaceState: KeyValueStore,
+		private readonly codebase?: CodebaseIndexService,
 	) {
 		this.session = history.current() ?? newSession();
 		this.lastEditor = vscode.window.activeTextEditor;
@@ -73,6 +78,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				},
 			}),
 			store.onDidChange(() => this.postState()),
+			...(codebase ? [codebase.onDidChangeStatus(() => this.codebaseAttached && this.postStateSoon())] : []),
 			vscode.window.onDidChangeActiveTextEditor(editor => {
 				if (editor) {
 					this.lastEditor = editor;
@@ -124,6 +130,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		this.stop();
 		this.session = newSession();
 		this.attachments = [];
+		this.codebaseAttached = false;
 		this.currentFileExcluded = false;
 		await this.history.setCurrent(undefined);
 		this.postState();
@@ -178,13 +185,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		}
 	}
 
+	private codebaseAvailable(): boolean {
+		const state = this.codebase?.status().state;
+		return state === 'scanning' || state === 'ready';
+	}
+
+	/** Search the project for the next message, as if it said @codebase. */
+	addCodebase(): void {
+		if (this.codebaseAvailable()) {
+			this.codebaseAttached = true;
+			this.postState();
+		}
+	}
+
 	async pickFile(): Promise<void> {
 		const files = await vscode.workspace.findFiles('**/*', undefined, 5000);
-		const items = files
+		type Item = vscode.QuickPickItem & { uri?: vscode.Uri; codebase?: boolean };
+		const items: Item[] = files
 			.map(uri => ({ label: vscode.workspace.asRelativePath(uri, false), uri }))
 			.sort((a, b) => a.label.localeCompare(b.label));
-		const picked = await vscode.window.showQuickPick(items, { title: 'Add file to chat', placeHolder: items.length ? 'Search files' : 'Open a folder to add its files', matchOnDescription: true });
-		if (picked) {
+		if (this.codebaseAvailable() && !this.codebaseAttached) {
+			items.unshift(
+				{ label: '$(search) Codebase', description: 'Search the whole project for what your message is about', detail: this.codebase!.describe(), alwaysShow: true, codebase: true },
+				{ label: 'Files', kind: vscode.QuickPickItemKind.Separator },
+			);
+		}
+		const picked = await vscode.window.showQuickPick(items, { title: 'Add context', placeHolder: items.length ? 'Search files' : 'Open a folder to add its files', matchOnDescription: true });
+		if (picked?.codebase) {
+			this.addCodebase();
+		} else if (picked?.uri) {
 			await this.addFile(picked.uri);
 		}
 		this.post({ type: 'focusInput' });
@@ -216,6 +245,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				await this.pickFile();
 				break;
 			case 'removeAttachment':
+				if (message.id === 'codebase') {
+					this.codebaseAttached = false;
+				}
 				this.attachments = this.attachments.filter(attachment => attachment.id !== message.id);
 				this.postState();
 				break;
@@ -378,20 +410,40 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			return;
 		}
 
-		const context = renderContext(this.editorContext(), this.attachments);
-		const userTurn: ChatTurn = { id: newId('turn'), role: 'user', text, context: context?.text, chips: context?.chips };
+		const editorContext = this.editorContext();
+		const attachments = this.attachments;
+		const mention = takeCodebaseMention(text);
+		const searchCodebase = (this.codebaseAttached || mention.mentioned) && this.codebaseAvailable();
+		const userTurn: ChatTurn = { id: newId('turn'), role: 'user', text };
 		const reply: ChatTurn = { id: newId('turn'), role: 'assistant', text: '', modelName: config.displayName };
 		if (!this.session.turns.length) {
-			this.session.title = titleFor(text);
+			this.session.title = titleFor(mention.query || text);
 		}
 		this.session.turns.push(userTurn, reply);
 		this.session.updatedAt = Date.now();
 		this.attachments = [];
+		this.codebaseAttached = false;
 
 		const abort = new AbortController();
 		this.abort = abort;
 		this.streamingTurnId = reply.id;
 		this.postState();
+
+		const extras: ExtraContext[] = [];
+		if (searchCodebase) {
+			extras.push(await this.codebaseContext(mention.query || text));
+		}
+		const context = renderContext(editorContext, attachments, extras);
+		userTurn.context = context?.text;
+		userTurn.chips = context?.chips;
+		this.postState();
+		if (abort.signal.aborted) {
+			this.abort = undefined;
+			this.streamingTurnId = undefined;
+			await this.history.save(this.session);
+			this.postState();
+			return;
+		}
 
 		if (this.mode === 'agent') {
 			await this.runAgent(config, reply, abort);
@@ -424,6 +476,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 		}
 	}
 
+	/** The <codebase> block for a message: the project's best matches for what it asks. */
+	private async codebaseContext(query: string): Promise<ExtraContext> {
+		try {
+			const { snippets } = await this.codebase!.search(query, { limit: 12 });
+			const block = renderCodebaseBlock(query, snippets);
+			if (block) {
+				return { text: block.text, chip: `Codebase · ${block.count} snippet${block.count === 1 ? '' : 's'}` };
+			}
+		} catch (error) {
+			console.error('[fork-ai] codebase search failed', error);
+		}
+		return { text: '', chip: 'Codebase · no matches' };
+	}
+
 	private async runAgent(config: Awaited<ReturnType<ModelStore['resolve']>> & object, reply: ChatTurn, abort: AbortController): Promise<void> {
 		const root = this.root();
 		try {
@@ -443,6 +509,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 				allowAlways: command => this.allowAlways(command),
 				askApproval: (step, command, allowAlways) => this.askApproval(step, command, allowAlways),
 				onUpdate: () => this.postStateLive(),
+				codebase: this.codebaseAvailable() ? this.codebase : undefined,
 			});
 		} catch (error) {
 			if (!(error instanceof ModelRouterError && error.kind === 'aborted')) {
@@ -482,7 +549,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			};
 		}
 		return {
-			models: this.store.list().map(model => ({ id: model.id, name: model.displayName, detail: modelDetail(model) })),
+			models: this.store.chatModels().map(model => ({ id: model.id, name: model.displayName, detail: modelDetail(model) })),
 			selectedModelId: this.store.chatModelId(),
 			turns: this.session.turns.map(turn => ({
 				id: turn.id,
@@ -498,7 +565,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 			})),
 			currentFile,
 			currentFileExcluded: this.currentFileExcluded,
-			attachments: this.attachments.map(attachment => ({ id: attachment.id, kind: attachment.kind, label: attachmentLabel(attachment), title: attachment.path })),
+			attachments: [
+				...(this.codebaseAttached && this.codebase ? [{ id: 'codebase', kind: 'codebase' as const, label: 'Codebase', title: `The project is searched for what your message asks. ${this.codebase.describe()}` }] : []),
+				...this.attachments.map(attachment => ({ id: attachment.id, kind: attachment.kind, label: attachmentLabel(attachment), title: attachment.path })),
+			],
 			busy: Boolean(this.abort),
 			streamingTurnId: this.streamingTurnId,
 			mode: this.mode,

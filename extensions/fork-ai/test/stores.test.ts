@@ -76,6 +76,28 @@ test('inline edits follow the chat model unless given their own', async () => {
 	assert.equal(store.hasOwnEditModel(), false);
 });
 
+test('embedding models serve codebase search and never chat', async () => {
+	const store = new ModelStore(new MemoryState(), new MemorySecrets());
+	await store.save({ ...model, id: 'emb', displayName: 'Embed', model: 'nomic-embed-text' }, { embeddingDims: 768 });
+	assert.equal(store.chatModelId(), undefined, 'an embedding model is not a chat model, even when it is the only one');
+	assert.equal(store.embedModelId(), undefined, 'keyword search until one is chosen');
+	await store.save(model);
+	assert.equal(store.chatModelId(), 'a');
+	assert.deepEqual(store.chatModels().map(m => m.id), ['a']);
+	await store.setChatModel('emb');
+	await store.setEditModel('emb');
+	assert.equal(store.chatModelId(), 'a');
+	assert.equal(store.hasOwnEditModel(), false);
+	await store.setEmbedModel('emb');
+	assert.equal(store.embedModelId(), 'emb');
+	assert.equal(store.get('emb')?.embeddingDims, 768);
+	assert.deepEqual(await store.resolve('emb'), { ...model, id: 'emb', displayName: 'Embed', model: 'nomic-embed-text' }, 'no store-only fields reach the client');
+	await store.save({ ...model, id: 'emb', displayName: 'Embed 2', model: 'nomic-embed-text' });
+	assert.equal(store.get('emb')?.embeddingDims, 768, 'kept across saves, like toolCalling');
+	await store.remove('emb');
+	assert.equal(store.embedModelId(), undefined);
+});
+
 test('saving without a key removes the old key', async () => {
 	const secrets = new MemorySecrets();
 	const store = new ModelStore(new MemoryState(), secrets);

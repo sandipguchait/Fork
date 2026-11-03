@@ -1,6 +1,6 @@
 # Fork AI
 
-Fork's built-in AI: chat, inline edits and an agent, all with your own models. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
+Fork's built-in AI: chat, inline edits, an agent and codebase search, all with your own models. Every request goes straight from the editor to the endpoint you configured, and nothing passes through a Fork server.
 
 ## Use it
 
@@ -12,7 +12,7 @@ Fork's built-in AI: chat, inline edits and an agent, all with your own models. E
 In the chat:
 
 - The **open file**, and your selection in it, are sent with each message. Click the file's chip to leave it out.
-- **Cmd+L** with code selected adds that selection to the chat. **@** or **Add context** adds any file.
+- **Cmd+L** with code selected adds that selection to the chat. **@** or **Add context** adds any file, or **Codebase** (below).
 - Code blocks have **Copy** and **Insert**. Insert replaces the selection in the editor you last used.
 - The model picker is in the input box. **New chat**, **History** and **Manage models** are in the view's title bar.
 
@@ -38,6 +38,7 @@ Switch the chat's **Ask / Agent** menu to **Agent** and describe a task, for exa
 | Tool | What it does | Asks first? |
 | --- | --- | --- |
 | `read_file`, `list_files`, `search` | Reads, lists and searches the project; skips `node_modules`, `.git` and build output | No |
+| `codebase_search` | Finds code by what it does, from the codebase index (below) | No |
 | `edit_file`, `create_file` | Exact-text edits and new files, saved so tests see them | No; every file is checkpointed first |
 | `run_command` | Runs a shell command in the project root, 120 s limit | Yes, except read-only basics (`git status`, `ls`, `cat` …) and commands you chose **Always allow** for |
 
@@ -50,6 +51,19 @@ Switch the chat's **Ask / Agent** menu to **Agent** and describe a task, for exa
 - Agent mode needs a model that passed the tool-calling test when it was added. If it failed, the chat warns you.
 - The agent stops after 25 steps; send another message to let it continue.
 
+## Codebase search
+
+Fork indexes the open folder in the background, so the agent and chat can find code without being told where it is. The status bar shows progress (**Indexing 1,200/4,800**), then the file count; click it for options.
+
+- **Keyword search, always on and free.** A local index that understands code: `parseDate`, `parse_date` and "parse dates" all match, file and folder names count, and tests rank below the code they test. Nothing leaves your computer.
+- **Search by meaning, optional.** Choose an embedding model (**Fork AI: Choose Embedding Model**, the status bar, or **Codebase search…** in Manage Models) and Fork also embeds every chunk of code, then ranks results by keywords and meaning together. Ollama with `nomic-embed-text` is free and local (`ollama pull nomic-embed-text`); OpenAI, Gemini, Mistral, LM Studio and any OpenAI-compatible endpoint work too. A cloud embedding model receives your code. Embeddings are cached on disk by content, so restarts and reindexing only embed what changed.
+- **In chat**, pick **Codebase** from **@** / **Add context**, or type `@codebase`. Fork searches for your message and sends the best matching snippets with it (the chip says how many).
+- **In Agent mode**, the agent calls `codebase_search` itself.
+
+What gets indexed: the first workspace folder, following `.gitignore` and `.forkignore` (same syntax; **Fork AI: Edit .forkignore**), skipping `node_modules`, build output, binaries, lock files and minified code. The index updates as files change. Settings under **Fork AI › Index** set the limits: 15,000 files, 512 KB per file and 100 MB of text by default. Source files are indexed before docs, config and tests, so the limits drop the least useful files first. The index lives in memory, about twice the size of the text indexed. **forkAi.index.enabled** turns it off.
+
+On the Fork source itself (VS Code, about 20,000 files) with the default limits, keyword search alone puts the right file in the top 5 for 15 of 20 "where is X" questions (`node fork/dev/eval-where-is.ts --limits`). Ten of those questions were used to tune the ranking and ten were not; on those ten it gets 7.
+
 ## Where things are stored
 
 | What | Where |
@@ -59,6 +73,8 @@ Switch the chat's **Ask / Agent** menu to **Agent** and describe a task, for exa
 | Chats | Workspace storage, the newest 50 per project |
 | Agent checkpoints | Memory only: **Undo all** works until the window reloads |
 | Commands you chose **Always allow** for, and the Ask/Agent choice | Workspace storage, per project |
+| Codebase index | Memory only, rebuilt when the window opens |
+| Embeddings | Workspace storage, one cache file per embedding model, holding only vectors of code still in the project |
 
 ## Layout
 
@@ -67,6 +83,7 @@ Switch the chat's **Ask / Agent** menu to **Agent** and describe a task, for exa
 | `src/extension.ts` | Activation and commands |
 | `src/chatView.ts` | The chat webview provider: context, streaming, history, Insert/Copy |
 | `src/agent/` | Agent mode: tools and approvals, the loop, workspace tools and checkpoints, one agent turn |
+| `src/index/` | Codebase search: tokenizer, chunker, ignore rules and BM25 + vector index (pure, unit-tested); the indexing service, embedding cache, status bar |
 | `src/inlineEdit.ts` | Cmd+I and Apply: the prompt, the in-place red/green review, Accept and Reject |
 | `src/diff.ts`, `src/editPrompt.ts` | The line diff and the edit prompt, unit-tested without VS Code |
 | `src/addModel.ts`, `src/manageModels.ts` | The Add model flow and the model list |

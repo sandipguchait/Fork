@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import type { ToolCallPart } from '../../../../fork/model-router/src/index.ts';
 import { approvalFor, type ApprovalNeed } from './approvals.ts';
 import type { ToolOutcome } from './loop.ts';
+import { formatForAgent, type Snippet } from '../index/snippets.ts';
 import { normalizeRelativePath, numberLines, replaceText, truncateOutput } from './tools.ts';
 
 export const EXCLUDE_GLOB = '{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**,**/.next/**,**/.venv/**,**/__pycache__/**}';
@@ -17,6 +18,12 @@ const COMMAND_TIMEOUT_MS = 120_000;
 
 export type ApprovalDecision = 'run' | 'always' | 'skip';
 
+/** The project index, as the agent sees it. */
+export interface CodebaseSearch {
+	search(query: string, options: { limit?: number; pathPrefix?: string }): Promise<{ snippets: Snippet[] }>;
+	describe(): string;
+}
+
 export interface ToolContext {
 	readonly root: vscode.Uri;
 	/** Content of each changed file before this turn; null when the agent created the file. */
@@ -24,6 +31,7 @@ export interface ToolContext {
 	readonly allowedCommands: () => readonly string[];
 	readonly requestApproval: (callId: string, command: string, need: Exclude<ApprovalNeed, 'none'>) => Promise<ApprovalDecision>;
 	readonly allowAlways: (command: string) => Promise<void>;
+	readonly codebase?: CodebaseSearch;
 }
 
 const str = (value: unknown) => typeof value === 'string' ? value : undefined;
@@ -40,6 +48,7 @@ export class WorkspaceTools {
 			case 'read_file': return this.readFile(str(args.path), Number(args.start_line) || 1, Number(args.end_line) || undefined);
 			case 'list_files': return this.listFiles(str(args.pattern));
 			case 'search': return this.search(str(args.query), args.is_regex === true, str(args.include));
+			case 'codebase_search': return this.codebaseSearch(str(args.query), str(args.path), Number(args.limit) || 8);
 			case 'edit_file': return this.editFile(str(args.path), str(args.old_text), str(args.new_text), args.replace_all === true);
 			case 'create_file': return this.createFile(str(args.path), str(args.content));
 			case 'run_command': return this.runCommand(call.id, str(args.command), signal);
@@ -102,6 +111,25 @@ export class WorkspaceTools {
 		}
 		const shown = paths.slice(0, 500);
 		return { content: shown.join('\n') + (paths.length > 500 ? '\n… more files not shown. Use a narrower pattern.' : '') };
+	}
+
+	private async codebaseSearch(query: string | undefined, path: string | undefined, limit: number): Promise<ToolOutcome> {
+		const codebase = this.context.codebase;
+		if (!codebase) {
+			return fail('Codebase search is not available. Use search instead.');
+		}
+		if (!query?.trim()) {
+			return fail('A query is required.');
+		}
+		let prefix: string | undefined;
+		if (path?.trim() && !/^\.?\/?$/.test(path.trim())) {
+			prefix = normalizeRelativePath(path);
+			if (!prefix) {
+				return fail(`${path} is outside the workspace.`);
+			}
+		}
+		const { snippets } = await codebase.search(query, { limit: Math.min(20, Math.max(1, Math.floor(limit))), pathPrefix: prefix });
+		return { content: formatForAgent(query, snippets, codebase.describe()) };
 	}
 
 	private async search(query: string | undefined, isRegex: boolean, include: string | undefined): Promise<ToolOutcome> {

@@ -24,7 +24,7 @@ export interface StepView {
 	readonly status?: 'running' | 'done' | 'error' | 'skipped' | 'awaiting';
 	readonly detail?: string;
 	/** Present while the step waits for Run / Skip. */
-	readonly approval?: { readonly command: string; readonly allowAlways: boolean };
+	readonly approval?: { readonly command: string; readonly allowAlways: boolean; readonly kind?: 'command' | 'tool' };
 }
 
 export interface ChangeView {

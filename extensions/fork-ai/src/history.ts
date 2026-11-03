@@ -36,7 +36,7 @@ export interface AgentStepRecord {
 	/** Tool steps: output shown when the card is expanded. */
 	detail?: string;
 	/** Tool steps awaiting approval: the command, and whether "Always allow" is offered. */
-	approval?: { readonly command: string; readonly allowAlways: boolean };
+	approval?: { readonly command: string; readonly allowAlways: boolean; readonly kind?: 'command' | 'tool' };
 }
 
 export interface ChatSession {

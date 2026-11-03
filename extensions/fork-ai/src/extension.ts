@@ -10,6 +10,8 @@ import { InlineEditController } from './inlineEdit.ts';
 import { CodebaseIndexService } from './index/service.ts';
 import { chooseEmbeddingModel, createIndexStatusBar, showIndexMenu } from './index/statusBar.ts';
 import { manageModels } from './manageModels.ts';
+import { McpManager, PROJECT_CONFIG, USER_CONFIG } from './mcp/manager.ts';
+import { openMcpConfig, showMcpServers } from './mcp/panel.ts';
 import { ModelStore } from './modelStore.ts';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -19,10 +21,26 @@ export function activate(context: vscode.ExtensionContext): void {
 	const history = new ChatHistory(context.workspaceState);
 	// The codebase index: kept in memory, embeddings cached in this workspace's storage.
 	const codebase = new CodebaseIndexService(context.storageUri, store);
-	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState, codebase);
+	// MCP servers from ~/.fork/mcp.json and .fork/mcp.json; their tools join Agent mode.
+	const mcpOutput = vscode.window.createOutputChannel('Fork AI: MCP');
+	const mcp = new McpManager(context.workspaceState, mcpOutput);
+	const chat = new ChatViewProvider(context.extensionUri, store, history, context.workspaceState, codebase, mcp);
 	const inlineEdit = new InlineEditController(store);
 
 	context.subscriptions.push(
+		mcpOutput,
+		mcp,
+		vscode.commands.registerCommand('forkAi.mcpServers', () => showMcpServers(mcp, mcpOutput)),
+		vscode.commands.registerCommand('forkAi.editUserMcp', () => openMcpConfig(USER_CONFIG())),
+		vscode.commands.registerCommand('forkAi.editProjectMcp', async () => {
+			const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+			if (root) {
+				await openMcpConfig(PROJECT_CONFIG(root));
+			} else {
+				void vscode.window.showInformationMessage('Open a folder to give it its own MCP servers. ~/.fork/mcp.json works for every project.');
+			}
+		}),
+		vscode.commands.registerCommand('forkAi.reloadMcp', () => mcp.reload()),
 		codebase,
 		createIndexStatusBar(codebase),
 		chat,
@@ -115,6 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 
 	codebase.start();
+	void mcp.reload();
 }
 
 export function deactivate(): void {

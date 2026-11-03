@@ -1,8 +1,8 @@
 {
 	"name": "fork-ai",
 	"displayName": "Fork AI",
-	"description": "Chat, inline edits, an agent and codebase search on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
-	"version": "0.4.0",
+	"description": "Chat, inline edits, an agent with MCP tools and a sandbox, and codebase search on your own models: any OpenAI-compatible, Anthropic or Gemini endpoint.",
+	"version": "0.5.0",
 	"publisher": "fork",
 	"license": "MIT",
 	"private": true,
@@ -145,6 +145,27 @@
 				"command": "forkAi.editForkignore",
 				"title": "Edit .forkignore",
 				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.mcpServers",
+				"title": "MCP Servers",
+				"category": "Fork AI",
+				"icon": "$(plug)"
+			},
+			{
+				"command": "forkAi.editUserMcp",
+				"title": "Edit User MCP Servers (~/.fork/mcp.json)",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.editProjectMcp",
+				"title": "Edit Project MCP Servers (.fork/mcp.json)",
+				"category": "Fork AI"
+			},
+			{
+				"command": "forkAi.reloadMcp",
+				"title": "Reload MCP Servers",
+				"category": "Fork AI"
 			}
 		],
 		"menus": {
@@ -163,6 +184,11 @@
 					"command": "forkAi.manageModels",
 					"when": "view == forkAi.chat",
 					"group": "navigation@3"
+				},
+				{
+					"command": "forkAi.mcpServers",
+					"when": "view == forkAi.chat",
+					"group": "navigation@4"
 				}
 			],
 			"editor/context": [
@@ -302,6 +328,50 @@
 					},
 					"default": [],
 					"description": "More files to leave out of the index, in .gitignore syntax, e.g. \"fixtures/\" or \"*.generated.ts\". .gitignore and .forkignore are followed too."
+				},
+				"forkAi.mcp.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Start the MCP servers in ~/.fork/mcp.json and the project's .fork/mcp.json, and give their tools to the agent. Project servers start only after you trust them."
+				},
+				"forkAi.agent.sandbox": {
+					"type": "string",
+					"enum": [
+						"auto",
+						"off"
+					],
+					"enumDescriptions": [
+						"Run the agent's commands in a sandbox where this computer has one (macOS; Linux with bubblewrap): they can write only inside the project, the temp folder and the folders in Sandbox Allow Write.",
+						"Run commands without a sandbox. They still ask for approval as usual."
+					],
+					"default": "auto",
+					"description": "Whether the agent's commands run in an OS sandbox."
+				},
+				"forkAi.agent.sandboxAllowWrite": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [
+						"~/.npm",
+						"~/.cache",
+						"~/.pnpm-store",
+						"~/Library/Caches",
+						"~/Library/pnpm",
+						"~/.yarn/berry/cache",
+						"~/.bun/install/cache",
+						"~/.cargo/registry",
+						"~/.cargo/git",
+						"~/go/pkg/mod",
+						"~/.gradle/caches",
+						"~/.m2/repository"
+					],
+					"description": "Folders outside the project that sandboxed commands may write to: package caches, so installs and builds work. \"~/\" is the home folder."
+				},
+				"forkAi.agent.sandboxNetwork": {
+					"type": "boolean",
+					"default": true,
+					"description": "Let sandboxed commands use the network. Turn off to keep tests and scripts from reaching the internet (package installs will fail)."
 				}
 			}
 		}
